@@ -7,6 +7,7 @@
   <groupId>uk.ac.ed.inf</groupId>
   <artifactId>heatmap</artifactId>
   <version>0.0.1-SNAPSHOT</version>
+  <packaging>jar</packaging>
 
   <name>heatmap</name>
   <!-- FIXME change it to the project's website -->
@@ -33,29 +34,37 @@
   </dependencies>
 
   <build>
-    <pluginManagement><!-- lock down plugins versions to avoid using Maven defaults (may be moved to parent pom) -->
       <plugins>
         <!-- clean lifecycle, see https://maven.apache.org/ref/current/maven-core/lifecycles.html#clean_Lifecycle -->
-        <plugin>
-          <artifactId>maven-clean-plugin</artifactId>
-          <version>3.1.0</version>
-        </plugin>
+		<plugin>
+		  <groupId>org.apache.maven.plugins</groupId>
+		  <artifactId>maven-jar-plugin</artifactId>
+		  <version>3.2.0</version>
+		  <configuration>
+		    <archive>
+			  <index>true</index>
+			  <manifest>
+			    <mainClass>uk.ac.ed.inf.heatmap.App</mainClass>
+			  </manifest>
+			</archive>
+		  </configuration>
+		</plugin>   
         <!-- default lifecycle, jar packaging: see https://maven.apache.org/ref/current/maven-core/default-bindings.html#Plugin_bindings_for_jar_packaging -->
         <plugin>
           <artifactId>maven-resources-plugin</artifactId>
           <version>3.0.2</version>
         </plugin>
         <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-compiler-plugin</artifactId>
-          <version>3.8.0</version>
-        </plugin>
-        <plugin>
-          <artifactId>maven-surefire-plugin</artifactId>
-          <version>2.22.1</version>
-        </plugin>
-        <plugin>
-          <artifactId>maven-jar-plugin</artifactId>
-          <version>3.0.2</version>
+          <version>3.8.1</version>
+          <configuration>
+		    <release>11</release>
+			<showWarnings>true</showWarnings>
+			<compilerArgs>
+			  <arg>-Xlint:all,-classfile</arg>
+			</compilerArgs>
+		  </configuration>
         </plugin>
         <plugin>
           <artifactId>maven-install-plugin</artifactId>
@@ -74,7 +83,19 @@
           <artifactId>maven-project-info-reports-plugin</artifactId>
           <version>3.0.0</version>
         </plugin>
+        <plugin>
+		  <groupId>org.apache.maven.plugins</groupId>
+		  <artifactId>maven-shade-plugin</artifactId>
+		  <version>3.2.4</version>
+		  <executions>
+			<execution>
+			  <phase>package</phase>
+			  <goals>
+				<goal>shade</goal>
+			  </goals>
+			</execution>
+		  </executions>
+		</plugin> 
       </plugins>
-    </pluginManagement>
   </build>
 </project>
