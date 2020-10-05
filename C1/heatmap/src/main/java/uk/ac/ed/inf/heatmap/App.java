@@ -24,8 +24,8 @@ public class App {
     private static final double FILL_OPACITY = 0.75;
     
     /*
-     * These are also constants the program depends on, but are calculated 
-     * from other constants rather than entered directly to reduce the chance of human error
+     * These are also constants the program depends on, but are calculated from other constants rather 
+     * than entered directly to reduce the chance of human error
      */
     private static final double RECTANGE_WIDTH = (MAXIMUM_LONGITUDE - MINIMUM_LONGITUDE) / GRID_HEIGHT;
     private static final double RECTANGE_HIGHT = (MAXIMUM_LATITUDE - MINIMUM_LATITUDE) / GRID_WIDTH; 
@@ -38,8 +38,8 @@ public class App {
         for (int i = 0; i < GRID_HEIGHT; i++) {
             String currentLine = input.readLine();
             
-            // We have run out of lines to read before expected, inform the user and exit the loop (the current heatmap will be written to file)
-            if (currentLine == null) {
+            // We have run out of lines to read before expected, inform the user. We choose to interpret an empty line as the end of the file
+            if (currentLine == null || currentLine.strip().equals("")) {
                 System.out.println("expected " + GRID_HEIGHT + " rows but found " + i);
                 break;
             }
@@ -51,8 +51,8 @@ public class App {
                 System.out.println("expected " + GRID_WIDTH + " values on row " + (i + 1) + " but found " + values.length);
             }
             
-            // We choose to map all the values given in the current line, even if it differs from the expected number of values
-            for (int j = 0; j < values.length; j++) {
+            // We choose to map at most the number of values specified in GRID_WIDTH, even if more are provided
+            for (int j = 0; j < values.length && j < GRID_WIDTH; j++) {
                 // Building the rectangle by specifying its vertices (corners), the coordinates of which are easy to calculate
                 var vertices = new ArrayList<List<Point>>();
                 vertices.add(new ArrayList<Point>());
@@ -63,13 +63,21 @@ public class App {
                 vertices.get(0).add(Point.fromLngLat(MINIMUM_LONGITUDE + j * RECTANGE_WIDTH, MAXIMUM_LATITUDE - i * RECTANGE_HIGHT));
                 var rectangle = Feature.fromGeometry(Polygon.fromLngLats(vertices));
                 
-                // Adding the required properties to the rectangle before adding it to the heatmap
-                int prediction = Integer.parseInt(values[j].strip());
-                String color = getAirQualityColor(prediction); 
-                rectangle.addStringProperty("rgb-string", color); 
-                rectangle.addStringProperty("fill", color);
-                rectangle.addNumberProperty("fill-opacity", FILL_OPACITY);
-                heatmap.add(rectangle);
+                /* 
+                 * Adding the required properties to the rectangle before adding it to the heatmap. 
+                 * If the properties cannot be processed, skip the cell but otherwise proceed as normal.
+                 */
+                try {
+                    int prediction = Integer.parseInt(values[j].strip());
+                    String color = getAirQualityColor(prediction); 
+                    rectangle.addStringProperty("rgb-string", color); 
+                    rectangle.addStringProperty("fill", color);
+                    rectangle.addNumberProperty("fill-opacity", FILL_OPACITY);
+                    heatmap.add(rectangle);
+                } catch (Exception e) {
+                    System.out.println("An error occurred when processing entry " + (j + 1) + " on row " + (i + 1) 
+                            + ". Please insure this entry is a valid integer with a specified color mapping. This entry will be skipped.");
+                }
             }
         }
         
@@ -77,6 +85,7 @@ public class App {
         var output = new FileWriter("heatmap.geojson");
         output.write(FeatureCollection.fromFeatures(heatmap).toJson());
         output.close();
+        System.out.println("Finished");
     }
     
     // Maps an air quality estimate to its associated color code
