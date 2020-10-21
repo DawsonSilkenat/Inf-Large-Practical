@@ -27,7 +27,7 @@ public class Sensor {
     }
     
     // Simplified constructor including default values for easier use
-    public Sensor(double longitude, double latitude, String what3words, double batteryLife, String reading) {
+    public Sensor(double longitude, double latitude, double batteryLife, String reading, String what3words) {
         this(longitude, latitude, batteryLife, reading, what3words, (String) null, "#aaaaaa", "medium");
     }
     

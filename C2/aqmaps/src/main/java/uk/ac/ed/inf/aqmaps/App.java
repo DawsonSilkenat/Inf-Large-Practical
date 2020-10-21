@@ -1,6 +1,8 @@
 package uk.ac.ed.inf.aqmaps;
 
 import com.mapbox.geojson.*;
+
+import java.io.FileWriter;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -36,6 +38,7 @@ public class App {
         // Parsing the json and reading additional information about the sensors 
         Type listType = new TypeToken<ArrayList<MapData>>() {}.getType();
         ArrayList<MapData> mapEntries = new Gson().fromJson(responce.body(), listType);
+        var sensors = new ArrayList<Sensor>();
         
         for (var entry : mapEntries) {
             request = HttpRequest.newBuilder().uri(URI.create(
@@ -47,9 +50,19 @@ public class App {
                         + "HTTP status code: " + responce.statusCode() + "\nThis entry will be skipped.");
             } else {
                 What3WordsData sensorInfo = new Gson().fromJson(responce.body(), What3WordsData.class);
-                
+                sensors.add(new Sensor(sensorInfo.getLng(), sensorInfo.getLat(), 
+                        entry.getBattery(), entry.getReading(), entry.getLocation()));
             }
         }
+        
+        // TODO removing testing
+        var output = new FileWriter("aqmap.geojson");
+        var out = new ArrayList<Feature>();
+        for (Sensor sensor : sensors) {
+            out.add(sensor.toGeojsonFeature());
+        }
+        output.write(FeatureCollection.fromFeatures(out).toJson());
+        output.close();
         
     }
 }
