@@ -13,8 +13,7 @@ import com.google.gson.Gson;
 import java.lang.reflect.Type;
 import com.google.gson.reflect.TypeToken;
 import java.util.ArrayList;
-
-import uk.ac.ed.inf.aqmaps.MapData;
+import java.util.List;
 
 public class App {
     
@@ -28,10 +27,9 @@ public class App {
         
         // Informing the user if there is a problem reading the specified map
         if (responce.statusCode() != 200) {
-            
+            // TODO make ok error code, right now this isn't correct 
             System.out.println("Error: unable to connect to " + webserver + " at port " + args[6] + ".\n"
                     + "HTTP status code: " + responce.statusCode() + "\nExiting");
-            
             System.exit(1);
         }
         
@@ -42,10 +40,11 @@ public class App {
         
         for (var entry : mapEntries) {
             request = HttpRequest.newBuilder().uri(URI.create(
-                    webserver + "/words/" + entry.getLocation().replace('.', '/') + "details.json")).build();
+                    webserver + "/words/" + entry.getLocation().replace('.', '/') + "/details.json")).build();
             responce = client.send(request, BodyHandlers.ofString());
             
             if (responce.statusCode() != 200) {
+                // TODO make ok error code, right now this isn't correct  
                 System.out.println("Error: unable to connect to " + webserver + " at port " + args[6] + ".\n"
                         + "HTTP status code: " + responce.statusCode() + "\nThis entry will be skipped.");
             } else {
@@ -55,13 +54,33 @@ public class App {
             }
         }
         
+        // Reading in the no fly zones
+        request = HttpRequest.newBuilder().uri(URI.create(
+                webserver + "/buildings/no-fly-zones.geojson")).build();
+        responce = client.send(request, BodyHandlers.ofString());
+        List<Feature> noFlyZones = null;
+        if (responce.statusCode() != 200) {
+            // TODO make ok error code, right now this isn't correct  
+            System.out.println("Error: unable to connect to " + webserver + " at port " + args[6] + ".\n"
+                    + "HTTP status code: " + responce.statusCode() + "\nThis entry will be skipped.");
+        } else {
+            noFlyZones = FeatureCollection.fromJson(responce.body()).features();
+        }
+        
+        
+        
+        
         // TODO removing testing
         var output = new FileWriter("aqmap.geojson");
-        var out = new ArrayList<Feature>();
+        var geojson = new ArrayList<Feature>();
         for (Sensor sensor : sensors) {
-            out.add(sensor.toGeojsonFeature());
+            geojson.add(sensor.toGeojsonFeature());
         }
-        output.write(FeatureCollection.fromFeatures(out).toJson());
+        for (Feature feature : noFlyZones) {
+            geojson.add(feature);
+        }
+        
+        output.write(FeatureCollection.fromFeatures(geojson).toJson());
         output.close();
         
     }
