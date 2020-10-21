@@ -11,7 +11,6 @@ import com.google.gson.Gson;
 import java.lang.reflect.Type;
 import com.google.gson.reflect.TypeToken;
 import java.util.ArrayList;
-import java.util.Iterator;
 
 import uk.ac.ed.inf.aqmaps.MapData;
 
@@ -34,7 +33,7 @@ public class App {
             System.exit(1);
         }
         
-        // Parsing the json 
+        // Parsing the json and reading additional information about the sensors 
         Type listType = new TypeToken<ArrayList<MapData>>() {}.getType();
         ArrayList<MapData> mapEntries = new Gson().fromJson(responce.body(), listType);
         
@@ -47,6 +46,7 @@ public class App {
                 System.out.println("Error: unable to connect to " + webserver + " at port " + args[6] + ".\n"
                         + "HTTP status code: " + responce.statusCode() + "\nThis entry will be skipped.");
             } else {
+                What3WordsData sensorInfo = new Gson().fromJson(responce.body(), What3WordsData.class);
                 
             }
         }
