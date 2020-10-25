@@ -66,11 +66,5 @@ public class Sensor {
             asGeoJson.addStringProperty("marker-symbol", markerSymbol);
         }
         return asGeoJson;
-    }
-    
-    // Returns the distance between this sensor and a (long, lat) point
-    public double getDistanceTo(double longitude, double latitude) {
-        return Math.sqrt(Math.pow(longitude - this.longitude, 2) + Math.pow(latitude - this.latitude, 2));
-    }
-    
+    } 
 }
