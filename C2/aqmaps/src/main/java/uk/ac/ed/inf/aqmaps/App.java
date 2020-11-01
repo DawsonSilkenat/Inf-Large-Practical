@@ -67,13 +67,21 @@ public class App {
         request = HttpRequest.newBuilder().uri(URI.create(
                 webserver + "/buildings/no-fly-zones.geojson")).build();
         responce = client.send(request, BodyHandlers.ofString());
-        List<Feature> noFlyZones = null;
+        List<Polygon> noFlyZones = new ArrayList<Polygon>();
         if (responce.statusCode() != 200) {
             // TODO make ok error code, right now this isn't correct  
             System.out.println("Error: unable to connect to " + webserver + " at port " + args[6] + ".\n"
                     + "HTTP status code: " + responce.statusCode() + "\nThis entry will be skipped.");
         } else {
-            noFlyZones = FeatureCollection.fromJson(responce.body()).features();
+            var buildings = FeatureCollection.fromJson(responce.body()).features();
+            
+            for (int i = 0; i < buildings.size(); i++) {
+                try {
+                    noFlyZones.add((Polygon) buildings.get(i).geometry());
+                } catch (Exception e) {
+                    System.out.println("Error: building number " + i + " could not be interpreted. \nThis entry will be skipped");
+                }
+            }
         }
         
         
@@ -94,8 +102,11 @@ public class App {
         for (Sensor sensor : sensors) {
             geojson.add(sensor.toGeojsonFeature());
         }
-        for (Feature feature : noFlyZones) {
-            geojson.add(feature);
+        
+        for (Polygon zone : noFlyZones) {
+            var asFeature = Feature.fromGeometry(zone);
+            asFeature.addStringProperty("fill", "#ff0000");
+            geojson.add(asFeature);
         }
         
         var path = new ArrayList<Point>();
