@@ -56,36 +56,33 @@ public class Drone {
         
     }
     
-    /*
-     * The drone cannot necessarily fly along the straight line to its destination, but we can easily construct a triangle
-     * one side of which is that straight line and the other two sides are lines the drone can fly along
-     * We assume acceptable error is generous enough that the diameter of the circle we want to land in is greater 
-     *  than the move distance of the drone
-     */
-    private void findPath(double startLongitude, double startLatitude, double endLongitude, double endLatitude, double acceptableError) {
+    
+    private void findPath(double startLng, double startLat, double endLng, double endLat, double acceptableError) {
+        
         
         
     }
+    
     
     /*
      * Solve the travelling salesperson problem using straight line distance between sensors (plus start point)
      * This visit order becomes our estimate of the optimal order to visit the sensors
      * Going to start with 2-opt method, might change later. 
      */
-    public List<Sensor> selectVistOrder(List<Sensor> sensors) {
+    private List<Sensor> selectVistOrder(List<Sensor> sensors) {
         var order = new ArrayList<Sensor>();
         // Initialising a distances array so we don't recompute the distance each time it is needed
         // We consider our last location to be the start point of the drone
         var distances = new double[sensors.size() + 1][sensors.size() + 1];
         
         for (int i = 0; i < distances.length - 1; i++) {
-            distances[i][distances.length - 1] = distanceBetween(sensors.get(i).getLongitude(), 
+            distances[i][distances.length - 1] = getDistance(sensors.get(i).getLongitude(), 
                     sensors.get(i).getLatitude(), longitude, latitude);
             distances[distances.length - 1][i] = distances[i][distances.length - 1];
         }
         for (int i = 0; i < distances.length - 2; i++) {
             for (int j = i + 1; j < distances.length - 1; j++) {
-                distances[i][j] = distanceBetween(sensors.get(i).getLongitude(), sensors.get(i).getLatitude(), 
+                distances[i][j] = getDistance(sensors.get(i).getLongitude(), sensors.get(i).getLatitude(), 
                         sensors.get(j).getLongitude(), sensors.get(j).getLatitude());
                 distances[j][i] = distances[i][j];
             }
@@ -127,57 +124,54 @@ public class Drone {
     }
     
     // Checks whether the straight line move from the first pair of coordinates to the second is legal
-    private boolean checkMoveLegality(double lng1, double lat1, double lng2, double lat2, List<Polygon> noFlyZones) {
+    private boolean checkMoveLegality(double startLng, double startLat, double endLng, double endLat, List<Polygon> noFlyZones) {
         // TODO Check if within confinement area
         
-        
-        
         for (Polygon zone : noFlyZones) {
-            
             var boundary = zone.outer().coordinates();
             // Easiest way to check if the move enters the zone is to find where it intersects with an edge
             for (int i = 0; i < boundary.size() - 1; i++) {
                 // We use equations of straight lines to find the point of intersection 
                 // Then check if that point is part of both line segments 
-                var lng3 = boundary.get(i).longitude();
-                var lat3 = boundary.get(i).latitude();
-                var lng4 = boundary.get(i + 1).longitude();
-                var lat4 = boundary.get(i).latitude();
+                var edgeLng1 = boundary.get(i).longitude();
+                var edgeLat1 = boundary.get(i).latitude();
+                var edgeLng2 = boundary.get(i + 1).longitude();
+                var edgeLat2 = boundary.get(i + 1).latitude();
                 
                 // Note that we are using the equation ax + by + c = 0 as either a or b could be 0. x axis is longitude, y latitude 
-                var a1 = lat2 - lat1;
-                var b1 = lng1 - lng2;
-                var c1 = lng1 * (-a1) + lat1 * (-b1); 
+                var a1 = endLat - startLat;
+                var b1 = startLng - endLng;
+                var c1 = startLng * (-a1) + startLat * (-b1); 
                 
-                var a2 = lat4 - lat3;
-                var b2 = lng3 - lng4;
-                var c2 = lng3 * (-a2) + lat3 * (-b2);
+                var a2 = edgeLat2 - edgeLat1;
+                var b2 = edgeLng1 - edgeLng2;
+                var c2 = edgeLng1 * (-a2) + edgeLat1 * (-b2);
                 
                 // Can be shown this is the solution for the point of intersection if one exists
                 if (a1 * b2 - a2 * b1 != 0) {
-                    var point = new double[2];
-                    point[0] = (b1 * c2 - b2 * c1) / (a1 * b2 - a2 * b1);
-                    point[1] = (a2 * c1 - a1 * c2) / (a1 * b2 - a2 * b1);
+                    var pointLng = (b1 * c2 - b2 * c1) / (a1 * b2 - a2 * b1);
+                    var pointLat = (a2 * c1 - a1 * c2) / (a1 * b2 - a2 * b1);
                     
                     // Check if the intersect point lies on both line segments. If so the move isn't legal
-                    if (point[0] >= Math.min(lng1, lng2) && point[0] <= Math.max(lng1, lng2) &&
-                            point[1] >= Math.min(lat1, lat2) && point[1] <= Math.max(lat1, lat2) &&
-                            point[0] >= Math.min(lng3, lng4) && point[0] <= Math.max(lng3, lng4) &&
-                            point[1] >= Math.min(lat3, lat4) && point[1] <= Math.max(lat3, lat4)) {
+                    if (pointLng >= Math.min(startLng, endLng) && pointLng <= Math.max(startLng, endLng) &&
+                            pointLat >= Math.min(startLat, endLat) && pointLat <= Math.max(startLat, endLat) &&
+                            pointLng >= Math.min(edgeLng1, edgeLng2) && pointLng <= Math.max(edgeLng1, edgeLng2) &&
+                            pointLat >= Math.min(edgeLat1, edgeLat2) && pointLat <= Math.max(edgeLat1, edgeLat2)) {
                         return false;
                     }
                 } else if (b2 * c1 - b1 * c2 == 0 && a2 * c1 - a1 * c2 == 0) {
                     // Tells us the two line segments are of the same line. We check if the segments overlap 
-                    var point = new double[2];
-                    if (distanceBetween(lng1, lat1, lng3, lat3) < distanceBetween(lng1, lat1, lng4, lat4)) {
-                        point[0] = lng3;
-                        point[1] = lat3;
+                    double pointLng;
+                    double pointLat;
+                    if (getDistance(startLng, startLat, edgeLng1, edgeLat1) < getDistance(startLng, startLat, edgeLng2, edgeLat2)) {
+                        pointLng = edgeLng1;
+                        pointLat = edgeLat1;
                     } else {
-                        point[0] = lng4;
-                        point[1] = lat4;
+                        pointLng = edgeLng2;
+                        pointLat = edgeLat2;
                     }
-                    if (point[0] >= Math.min(lng1, lng2) && point[0] <= Math.max(lng1, lng2) &&
-                            point[1] >= Math.min(lat1, lat2) && point[1] <= Math.max(lat1, lat2)) {
+                    if (pointLng >= Math.min(startLng, endLng) && pointLng <= Math.max(startLng, endLng) &&
+                            pointLat >= Math.min(startLat, endLat) && pointLat <= Math.max(startLat, endLat)) {
                         return false;
                     } 
                 }  
@@ -187,8 +181,13 @@ public class Drone {
         return true;
     }
     
-    private double distanceBetween(double longitude1, double latitude1, double longitude2, double latitude2) {
-        return Math.sqrt(Math.pow(longitude1 - longitude2, 2) + Math.pow(latitude1 - latitude2, 2));
+    
+    private double getDistance(double startLng, double startLat, double endLng, double endLat) {
+        return Math.sqrt(Math.pow(startLng - endLng, 2) + Math.pow(startLat - endLat, 2));
     }
+    
+//    private double getDistance(Point start, Point end) {
+//        return Math.sqrt(Math.pow(start.longitude() - end.longitude(), 2) + Math.pow(start.latitude() - end.latitude(), 2));
+//    }
     
 }
