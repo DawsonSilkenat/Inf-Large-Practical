@@ -27,7 +27,6 @@ public class Drone {
         this.maxMoves = maxMoves;
     }
     
-    
     public LineString visitSensors(List<Sensor> sensors, List<Polygon> noFlyZones) {
         var visitOrder = selectVistOrder(sensors);
         var paths = new ArrayList<Path>();
@@ -40,7 +39,7 @@ public class Drone {
             currentLng = path.getEndLng();
             currentLat = path.getEndLat();
             paths.add(path);
-            sensor.visit();
+            sensor.visit();   
         }
         
         paths.add(findPath(currentLng, currentLat, longitude, latitude, endingDistance, 0, noFlyZones));
@@ -50,13 +49,12 @@ public class Drone {
             asGeoJason.addAll(path.getPositions());
         }
         
-        System.out.println(asGeoJason.size());
-        
         return LineString.fromLngLats(asGeoJason);        
     }
     
     
-    private Path findPath(double startLng, double startLat, double endLng, double endLat, double acceptableError, int minMoves, List<Polygon> noFlyZones) {
+    private Path findPath(double startLng, double startLat, double endLng, double endLat, 
+            double acceptableError, int minMoves, List<Polygon> noFlyZones) {
         var searchSpace = new PriorityQueue<Path>();
         searchSpace.add(new Path(startLng, startLat, endLng, endLat));
         
@@ -157,40 +155,31 @@ public class Drone {
                 // Note that we are using the equation ax + by + c = 0 as either a or b could be 0. x axis is longitude, y latitude 
                 var a1 = endLat - startLat;
                 var b1 = startLng - endLng;
-                var c1 = startLng * (-a1) + startLat * (-b1); 
+                var c1 = -(startLng * a1) - (startLat * b1); 
                 
                 var a2 = edgeLat2 - edgeLat1;
                 var b2 = edgeLng1 - edgeLng2;
-                var c2 = edgeLng1 * (-a2) + edgeLat1 * (-b2);
+                var c2 = -(edgeLng1 * a2) - (edgeLat1 * b2);
                 
-                // Can be shown this is the solution for the point of intersection if one exists
-                if (a1 * b2 - a2 * b1 != 0) {
-                    var pointLng = (b1 * c2 - b2 * c1) / (a1 * b2 - a2 * b1);
-                    var pointLat = (a2 * c1 - a1 * c2) / (a1 * b2 - a2 * b1);
+                // Can be shown this is the solution for the point of intersection if the lines aren't parallel
+                if ((a1 * b2) - (a2 * b1) != 0) {
+                    var pointLng = ((b1 * c2) - (b2 * c1)) / ((a1 * b2) - (a2 * b1));
+                    var pointLat = ((a2 * c1) - (a1 * c2)) / ((a1 * b2) - (a2 * b1));
                     
                     // Check if the intersect point lies on both line segments. If so the move isn't legal
                     if (pointLng >= Math.min(startLng, endLng) && pointLng <= Math.max(startLng, endLng) &&
                             pointLat >= Math.min(startLat, endLat) && pointLat <= Math.max(startLat, endLat) &&
                             pointLng >= Math.min(edgeLng1, edgeLng2) && pointLng <= Math.max(edgeLng1, edgeLng2) &&
                             pointLat >= Math.min(edgeLat1, edgeLat2) && pointLat <= Math.max(edgeLat1, edgeLat2)) {
+                        
                         return false;
                     }
-                } else if (b2 * c1 - b1 * c2 == 0 && a2 * c1 - a1 * c2 == 0) {
-                    // TODO think this can just be one large if statement
-                    // Tells us the two line segments are of the same line. We check if the segments overlap 
-                    double pointLng;
-                    double pointLat;
-                    if (getDistance(startLng, startLat, edgeLng1, edgeLat1) < getDistance(startLng, startLat, edgeLng2, edgeLat2)) {
-                        pointLng = edgeLng1;
-                        pointLat = edgeLat1;
-                    } else {
-                        pointLng = edgeLng2;
-                        pointLat = edgeLat2;
-                    }
-                    if (pointLng >= Math.min(startLng, endLng) && pointLng <= Math.max(startLng, endLng) &&
-                            pointLat >= Math.min(startLat, endLat) && pointLat <= Math.max(startLat, endLat)) {
-                        return false;
-                    } 
+                } else if ((b2 * c1) - (b1 * c2) == 0 && (a2 * c1) - (a1 * c2) == 0 &&
+                        ((edgeLng1 >= Math.min(startLng, endLng) && edgeLng1 <= Math.max(startLng, endLng) && 
+                          edgeLat1 >= Math.min(startLat, endLat) && edgeLat1 <= Math.max(startLat, endLat)) ||
+                        ( edgeLng2 >= Math.min(startLng, endLng) && edgeLng2 <= Math.max(startLng, endLng) && 
+                          edgeLat2 >= Math.min(startLat, endLat) && edgeLat2 <= Math.max(startLat, endLat)))) {
+                    return false;
                 }  
             }
         }

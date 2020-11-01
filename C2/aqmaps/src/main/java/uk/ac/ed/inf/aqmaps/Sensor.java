@@ -94,4 +94,9 @@ public class Sensor {
         }
         return asGeoJson;
     }   
+    
+    
+    public String getwhat3words() {
+        return what3words;
+    }
 }
