@@ -2,8 +2,8 @@ package uk.ac.ed.inf.aqmaps;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.PriorityQueue;
 
-import com.mapbox.geojson.Feature;
 import com.mapbox.geojson.LineString;
 import com.mapbox.geojson.Point;
 import com.mapbox.geojson.Polygon;
@@ -28,39 +28,55 @@ public class Drone {
     }
     
     
-    public void visitSensors(List<Sensor> sensors, List<Polygon> noFlyZones) {
-//        var visitOrder = selectVistOrder(sensors);
-//        // The ith element of moves is an array containing the angle of each move in order to visit the ith element of visit order
-//        var moves = new ArrayList<int[]>();
-//        int numberOfMoves = 0;
-//        var longitude = this.longitude;
-//        var latitude = this.latitude;
-//        
-//        for (Polygon building : noFlyZones) {
-//            collisionDetection(0, 0, 0, 0, building);
-//        }
+    public LineString visitSensors(List<Sensor> sensors, List<Polygon> noFlyZones) {
+        var visitOrder = selectVistOrder(sensors);
+        var paths = new ArrayList<Path>();
         
-//        for (int i = 0; i < visitOrder.size(); i++) {
-//            var movesToSensor = findPath(longitude, latitude, visitOrder.get(i).getLongitude(), visitOrder.get(i).getLatitude(), readDistance);
-//            moves.add(movesToSensor);
-//            longitude += moveDistance * (movesToSensor[1] * Math.cos(movesToSensor[0] * Math.PI / 180) +
-//                    movesToSensor[2] * Math.cos((movesToSensor[0] + angleStepSize) * Math.PI / 180));
-//            latitude += moveDistance * (movesToSensor[1] * Math.sin(movesToSensor[0] * Math.PI / 180) +
-//                    movesToSensor[2] * Math.sin((movesToSensor[0] + angleStepSize) * Math.PI / 180));
-//            numberOfMoves += movesToSensor[1] + movesToSensor[2];
-//        }
-//        
-//        var returnToStart = findPath(longitude, latitude, this.longitude, this.latitude, endingDistance);
-//        moves.add(returnToStart);
-//        numberOfMoves += returnToStart[1] + returnToStart[2];
+        var currentLng = longitude;
+        var currentLat = latitude;
         
+        for (Sensor sensor : visitOrder) {
+            var path = findPath(currentLng, currentLat, sensor.getLongitude(), sensor.getLatitude(), readDistance, 1, noFlyZones);
+            currentLng = path.getEndLng();
+            currentLat = path.getEndLat();
+            paths.add(path);
+            sensor.visit();
+        }
+        
+        paths.add(findPath(currentLng, currentLat, longitude, latitude, endingDistance, 0, noFlyZones));
+        
+        var asGeoJason = new ArrayList<Point>();
+        for (Path path : paths) {
+            asGeoJason.addAll(path.getPositions());
+        }
+        
+        System.out.println(asGeoJason.size());
+        
+        return LineString.fromLngLats(asGeoJason);        
     }
     
     
-    private void findPath(double startLng, double startLat, double endLng, double endLat, double acceptableError) {
+    private Path findPath(double startLng, double startLat, double endLng, double endLat, double acceptableError, int minMoves, List<Polygon> noFlyZones) {
+        var searchSpace = new PriorityQueue<Path>();
+        searchSpace.add(new Path(startLng, startLat, endLng, endLat));
         
+        while (!searchSpace.isEmpty()) {
+            var currentPath = searchSpace.poll();
+            if (currentPath.getHeuristic() <= acceptableError && currentPath.getMoves().size() > minMoves) {
+                return currentPath;
+            }
+            
+            for (int angle = 0; angle < 360; angle += angleStepSize) {
+                var extendedPath = currentPath.extend(angle, moveDistance);
+                
+                if (checkMoveLegality(currentPath.getEndLng(), currentPath.getEndLat(), extendedPath.getEndLng(), extendedPath.getEndLat(), 
+                        noFlyZones) && extendedPath.getMoves().size() < maxMoves) {
+                    searchSpace.add(extendedPath);
+                } 
+            }
+        }
         
-        
+        return null; 
     }
     
     
@@ -160,6 +176,7 @@ public class Drone {
                         return false;
                     }
                 } else if (b2 * c1 - b1 * c2 == 0 && a2 * c1 - a1 * c2 == 0) {
+                    // TODO think this can just be one large if statement
                     // Tells us the two line segments are of the same line. We check if the segments overlap 
                     double pointLng;
                     double pointLat;
@@ -191,3 +208,16 @@ public class Drone {
 //    }
     
 }
+
+
+
+
+
+
+
+
+
+
+
+
+

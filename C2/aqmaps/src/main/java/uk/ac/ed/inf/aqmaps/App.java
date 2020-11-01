@@ -93,12 +93,13 @@ public class App {
         
         
         // TODO TESTING DRONE MOVEMENT ALGORITHM
-        drone.visitSensors(sensors, noFlyZones);
+//        drone.visitSensors(sensors, noFlyZones);
         
         
         // TODO removing testing
         var output = new FileWriter("aqmap.geojson");
         var geojson = new ArrayList<Feature>();
+        geojson.add(Feature.fromGeometry(drone.visitSensors(sensors, noFlyZones)));
         for (Sensor sensor : sensors) {
             geojson.add(sensor.toGeojsonFeature());
         }
@@ -107,16 +108,12 @@ public class App {
             var asFeature = Feature.fromGeometry(zone);
             asFeature.addStringProperty("fill", "#ff0000");
             geojson.add(asFeature);
+            for (int i = 0; i < zone.outer().coordinates().size() - 1; i++) {
+                var p = Feature.fromGeometry(zone.outer().coordinates().get(i));
+                p.addStringProperty("marker-color", "#ff0000");
+                geojson.add(p);
+            }
         }
-        
-        var path = new ArrayList<Point>();
-        path.add(Point.fromLngLat(Double.parseDouble(args[4]), Double.parseDouble(args[3])));
-        for (Sensor s : drone.selectVistOrder(sensors)) {
-            path.add(Point.fromLngLat(s.getLongitude(), s.getLatitude()));
-        }
-        
-        path.add(Point.fromLngLat(Double.parseDouble(args[4]), Double.parseDouble(args[3])));
-        geojson.add(Feature.fromGeometry(LineString.fromLngLats(path)));
         
         output.write(FeatureCollection.fromFeatures(geojson).toJson());
         output.close();

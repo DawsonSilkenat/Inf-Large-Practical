@@ -93,5 +93,5 @@ public class Sensor {
             asGeoJson.addStringProperty("marker-symbol", markerSymbol);
         }
         return asGeoJson;
-    } 
+    }   
 }
