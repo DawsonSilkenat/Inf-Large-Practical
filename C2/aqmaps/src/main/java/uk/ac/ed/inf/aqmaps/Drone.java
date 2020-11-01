@@ -28,17 +28,16 @@ public class Drone {
     }
     
     
-    public void visitSensors(List<Sensor> sensors, List<Feature> noFlyZones) {
-        var visitOrder = this.selectVistOrder(sensors);
+    public void visitSensors(List<Sensor> sensors, List<Polygon> noFlyZones) {
+        var visitOrder = selectVistOrder(sensors);
         // The ith element of moves is an array containing the angle of each move in order to visit the ith element of visit order
         var moves = new ArrayList<int[]>();
         int numberOfMoves = 0;
         var longitude = this.longitude;
         var latitude = this.latitude;
         
-        for (Feature building : noFlyZones) {
-            collisionDetection(0, 0, 0, 0, 
-                    (Polygon) building.geometry());
+        for (Polygon building : noFlyZones) {
+            collisionDetection(0, 0, 0, 0, building);
         }
         
         for (int i = 0; i < visitOrder.size(); i++) {
