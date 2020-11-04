@@ -23,39 +23,45 @@ public class App {
     private static int MAX_MOVES = 150;
     
     public static void main(String[] args) throws IOException, InterruptedException {
-        // Reading specified map 
-        var webserver = "http://localhost:" + args[6];
-        var client = HttpClient.newHttpClient();
-        var request = HttpRequest.newBuilder().uri(URI.create(
-                webserver + "/maps/" + args[2] + "/" + args[1] + "/" + args[0] + "/air-quality-data.json")).build(); 
-        var responce = client.send(request, BodyHandlers.ofString());
-        
-        // Informing the user if there is a problem reading the specified map
-        if (responce.statusCode() != 200) {
-            // TODO make ok error code, right now this isn't correct 
-            System.out.println("Error: unable to connect to " + webserver + " at port " + args[6] + ".\n"
-                    + "HTTP status code: " + responce.statusCode() + "\nExiting");
+        var day = args[0];
+        var month = args[1];
+        var year = args[2];
+        double droneLng = 0;
+        double droneLat = 0;
+        try {
+            droneLng = Double.parseDouble(args[3]);
+            droneLat = Double.parseDouble(args[4]);
+        } catch (Exception e) {
+            //TODO Add error message
             System.exit(1);
         }
+        // 5th arg is the seed for any randomness. We don't use this
+        var webserver = "http://localhost:" + args[6];
         
-        // Parsing the json and reading additional information about the sensors 
-//        Type listType = new TypeToken<ArrayList<MapData>>() {}.getType();    
-//        ArrayList<MapData> mapEntries = new Gson().fromJson(responce.body(), listType);
-        Type listType = new TypeToken<List<MapData>>() {}.getType();
-        List<MapData> mapEntries = new Gson().fromJson(responce.body(), listType);
+        var sensors = getSensors(day, month, year, webserver);
+        var noFlyZones = getNoFlyZones(day, month, year, webserver);
+        Drone drone = new Drone(droneLng, droneLat, DRONE_MOVE_DISTANCE, READ_DISTANCE, ENDING_DISTANCE, MAX_MOVES);
+        var dronePath = drone.visitSensors(sensors, noFlyZones);
         
-//        var sensors = new ArrayList<Sensor>();
-        List<Sensor> sensors = new ArrayList<Sensor>();
+        // TODO move writing output to new function(s), remove testing code
+        writeAQMap(sensors, dronePath, noFlyZones);
+        
+    }
+    
+    private static List<Sensor> getSensors(String day, String month, String year, String webserver) throws IOException, InterruptedException {
+        var mapEntries = getMapData(day, month, year, webserver);
+        var client = HttpClient.newHttpClient();
+        var sensors = new ArrayList<Sensor>();
         
         for (var entry : mapEntries) {
-            request = HttpRequest.newBuilder().uri(URI.create(
+            var request = HttpRequest.newBuilder().uri(URI.create(
                     webserver + "/words/" + entry.getLocation().replace('.', '/') + "/details.json")).build();
-            responce = client.send(request, BodyHandlers.ofString());
+            var responce = client.send(request, BodyHandlers.ofString());
             
             if (responce.statusCode() != 200) {
                 // TODO make ok error code, right now this isn't correct  
-                System.out.println("Error: unable to connect to " + webserver + " at port " + args[6] + ".\n"
-                        + "HTTP status code: " + responce.statusCode() + "\nThis entry will be skipped.");
+//                System.out.println("Error: unable to connect to " + webserver + " at port " + args[6] + ".\n"
+//                        + "HTTP status code: " + responce.statusCode() + "\nThis entry will be skipped.");
             } else {
                 What3WordsData sensorInfo = new Gson().fromJson(responce.body(), What3WordsData.class);
                 sensors.add(new Sensor(sensorInfo.getLng(), sensorInfo.getLat(), 
@@ -63,15 +69,38 @@ public class App {
             }
         }
         
-        // Reading in the no fly zones
-        request = HttpRequest.newBuilder().uri(URI.create(
-                webserver + "/buildings/no-fly-zones.geojson")).build();
-        responce = client.send(request, BodyHandlers.ofString());
+        return sensors;
+    }
+    
+    private static List<MapData> getMapData(String day, String month, String year, String webserver) throws IOException, InterruptedException {
+        var client = HttpClient.newHttpClient();
+        var request = HttpRequest.newBuilder().uri(URI.create(
+                webserver + "/maps/" + year + "/" + month + "/" + day + "/air-quality-data.json")).build(); 
+        var responce = client.send(request, BodyHandlers.ofString());
+        
+        // Informing the user if there is a problem reading the specified map
+        if (responce.statusCode() != 200) {
+            // TODO make ok error code, right now this isn't correct 
+            System.out.println("Error: unable to connect to " + webserver + ".\n"
+                    + "HTTP status code: " + responce.statusCode() + "\nExiting");
+            System.exit(1);
+        }
+        
+        Type listType = new TypeToken<List<MapData>>() {}.getType();
+//        List<MapData> mapEntries = new Gson().fromJson(responce.body(), listType);
+//        return mapEntries;
+        return new Gson().fromJson(responce.body(), listType);
+    }
+    
+    private static List<Polygon> getNoFlyZones(String day, String month, String year, String webserver) throws IOException, InterruptedException {
+        var client = HttpClient.newHttpClient();
+        var request = HttpRequest.newBuilder().uri(URI.create(webserver + "/buildings/no-fly-zones.geojson")).build();
+        var responce = client.send(request, BodyHandlers.ofString());
         List<Polygon> noFlyZones = new ArrayList<Polygon>();
         if (responce.statusCode() != 200) {
             // TODO make ok error code, right now this isn't correct  
-            System.out.println("Error: unable to connect to " + webserver + " at port " + args[6] + ".\n"
-                    + "HTTP status code: " + responce.statusCode() + "\nThis entry will be skipped.");
+//            System.out.println("Error: unable to connect to " + webserver + " at port " + args[6] + ".\n"
+//                    + "HTTP status code: " + responce.statusCode() + "\nThis entry will be skipped.");
         } else {
             var buildings = FeatureCollection.fromJson(responce.body()).features();
             
@@ -84,22 +113,14 @@ public class App {
             }
         }
         
-        
-        // Note that the order is longitude, latitude consistent with the order for output, 
-        // but the arguments for this main method are in the order latitude, longitude 
-        Drone drone = new Drone(Double.parseDouble(args[4]), Double.parseDouble(args[3]), 
-                DRONE_MOVE_DISTANCE, READ_DISTANCE, ENDING_DISTANCE, MAX_MOVES);
-        
-        
-        
-        // TODO TESTING DRONE MOVEMENT ALGORITHM
-//        drone.visitSensors(sensors, noFlyZones);
-        
-        
-        // TODO removing testing
+        return noFlyZones;
+    }
+    
+    private static void writeAQMap(List<Sensor> sensors, LineString dronePath, List<Polygon> noFlyZones) throws IOException {
         var output = new FileWriter("aqmap.geojson");
         var geojson = new ArrayList<Feature>();
-        geojson.add(Feature.fromGeometry(drone.visitSensors(sensors, noFlyZones)));
+        
+        geojson.add(Feature.fromGeometry(dronePath));
         for (Sensor sensor : sensors) {
             geojson.add(sensor.toGeojsonFeature());
         }
@@ -117,6 +138,5 @@ public class App {
         
         output.write(FeatureCollection.fromFeatures(geojson).toJson());
         output.close();
-        
     }
 }

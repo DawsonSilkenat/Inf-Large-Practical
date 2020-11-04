@@ -16,7 +16,7 @@ public class Drone {
     private double readDistance;
     private double endingDistance;
     private int maxMoves;
-    private int angleStepSize= 10;
+    private int angleStepSize = 10;
     
     public Drone(double longitude, double latitude, double moveDistance, double readDistance, double endingDistance, int maxMoves) {
         this.longitude = longitude;
@@ -28,7 +28,7 @@ public class Drone {
     }
     
     public LineString visitSensors(List<Sensor> sensors, List<Polygon> noFlyZones) {
-        var visitOrder = selectVistOrder(sensors);
+        var visitOrder = selectVistOrder(sensors, noFlyZones);
         var paths = new ArrayList<Path>();
         
         var currentLng = longitude;
@@ -53,8 +53,7 @@ public class Drone {
     }
     
     
-    private Path findPath(double startLng, double startLat, double endLng, double endLat, 
-            double acceptableError, int minMoves, List<Polygon> noFlyZones) {
+    private Path findPath(double startLng, double startLat, double endLng, double endLat, double acceptableError, int minMoves, List<Polygon> noFlyZones) {
         var searchSpace = new PriorityQueue<Path>();
         searchSpace.add(new Path(startLng, startLat, endLng, endLat));
         
@@ -83,7 +82,7 @@ public class Drone {
      * This visit order becomes our estimate of the optimal order to visit the sensors
      * Going to start with 2-opt method, might change later. 
      */
-    private List<Sensor> selectVistOrder(List<Sensor> sensors) {
+    private List<Sensor> selectVistOrder(List<Sensor> sensors, List<Polygon> noFlyZones) {
         var order = new ArrayList<Sensor>();
         // Initialising a distances array so we don't recompute the distance each time it is needed
         // We consider our last location to be the start point of the drone
@@ -102,11 +101,41 @@ public class Drone {
             }
         }
         
-        /*
-         * We are using the 2-opt method to find a good solution to the travelling salesperson problem
-         * It works by taking an initial choice of solution and improving it by reversing segments where doing so reduce 
-         * the total length of the solution. It does this until it can't find any more swaps which improve the solution.  
-         */
+//        var distances = new int[sensors.size() + 1][sensors.size() + 1];
+//        for (int i = 0; i < distances.length - 1; i++) {
+//            distances[i][distances.length - 1] = findPath(longitude, latitude, sensors.get(i).getLongitude(), sensors.get(i).getLatitude(), 
+//                    readDistance, 1, noFlyZones).getPositions().size();
+//            distances[distances.length - 1][i] = distances[i][distances.length - 1];   
+//        }
+//        for (int i = 0; i < distances.length - 2; i++) {
+//            for (int j = i + 1; j < distances.length - 1; j++) {
+//                distances[i][j] = findPath(sensors.get(i).getLongitude(), sensors.get(i).getLatitude(), sensors.get(j).getLongitude(), 
+//                        sensors.get(j).getLatitude(), readDistance, 1, noFlyZones).getPositions().size();
+//                distances[j][i] = distances[i][j];
+//            }
+//        }
+//        
+        var indices = twoOpt(distances);
+        int droneIndex = 0;
+        for (int i = 0; i < indices.length; i++) {
+            if (indices[i] == distances.length - 1) {
+                droneIndex = i;
+            }
+        }
+        
+        for (int i = 1; i < indices.length; i++) {
+            order.add(sensors.get(indices[(droneIndex + i) % indices.length]));
+        }
+        
+        return order;
+    }
+    
+    /*
+     * We are using the 2-opt method to find a good solution to the travelling salesperson problem
+     * It works by taking an initial choice of solution and improving it by reversing segments where doing so reduce 
+     * the total length of the solution. It does this until it can't find any more swaps which improve the solution.  
+     */
+    private int[] twoOpt(double[][] distances) {
         var indices = new int[distances.length];
         for (int i = 0; i < indices.length; i++) {
             indices[i] = i;
@@ -119,23 +148,22 @@ public class Drone {
                 for (int j = i + 1; j < indices.length - 1; j++) {
                     if (distances[indices[(i - 1 + indices.length) % indices.length]][indices[j]] + distances[indices[i]][indices[j + 1]] < 
                                   distances[indices[(i - 1 + indices.length) % indices.length]][indices[i]] + distances[indices[j]][indices[j + 1]]) {
+                        
                         for (int i2 = i, j2 = j; i2 < j2; i2++, j2--) {
                             var temp = indices[i2];
                             indices[i2] = indices[j2];
                             indices[j2] = temp;
                         }
+                        
                         improvement = true;
                     }
                 }
             }  
         }
         
-        for (int i = 0; i < indices.length - 1; i++) {
-            order.add(sensors.get(indices[i]));
-        }
-        
-        return order;
+        return indices;
     }
+    
     
     // Checks whether the straight line move from the first pair of coordinates to the second is legal
     private boolean checkMoveLegality(double startLng, double startLat, double endLng, double endLat, List<Polygon> noFlyZones) {
@@ -186,8 +214,7 @@ public class Drone {
         // If we haven't found a reason for the move to be illegal, it is considered legal
         return true;
     }
-    
-    
+        
     private double getDistance(double startLng, double startLat, double endLng, double endLat) {
         return Math.sqrt(Math.pow(startLng - endLng, 2) + Math.pow(startLat - endLat, 2));
     }
