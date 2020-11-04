@@ -6,76 +6,60 @@ import java.util.List;
 import com.mapbox.geojson.Point;
 
 public class Path implements Comparable<Path> {
-//    private double endLng;
-//    private double endLat;
-    private double goalLng;
-    private double goalLat;
-    private List<Integer> moves;
-    private List<Point> positions;
+    private Path parent;
+    private Point position;
+    private Point goal;
+    private int moveAngle;
     private double cost;
     private double heuristic;
     
-    public Path(double startLng, double startLat, double goalLng, double goalLat) {
-//        endLng = startLng;
-//        endLat = startLat;
-        this.goalLng = goalLng;
-        this.goalLat = goalLat;
-        moves = new ArrayList<Integer>();
-        positions = new ArrayList<Point>();
-        positions.add(Point.fromLngLat(startLng, startLat));
-        
+    public Path(Point position, Point goal) {
+        parent = null;
+        this.position = position;
+        this.goal = goal;
         cost = 0;
-        heuristic = findDistance(startLng, startLat, goalLng, goalLat);
+        heuristic = findDistance(position, goal);
     }
     
-    private Path(int angle, double distance, Path previous) {
-//        endLng = previous.endLng + Math.cos(angle * Math.PI / 180.0) * distance;
-//        endLat = previous.endLat + Math.sin(angle * Math.PI / 180.0) * distance;
-        var endLng = previous.getEndLng() + Math.cos(angle * Math.PI / 180.0) * distance;
-        var endLat = previous.getEndLat() + Math.sin(angle * Math.PI / 180.0) * distance;
-        goalLng = previous.goalLng;
-        goalLat = previous.goalLat;
-        
-        moves = new ArrayList<Integer>();
-        moves.addAll(previous.moves);
-        moves.add(angle);
-        
-        positions = new ArrayList<Point>();
-        positions.addAll(previous.positions);
-        positions.add(Point.fromLngLat(endLng, endLat));
-        
-        cost = previous.cost + distance;
-        heuristic = findDistance(endLng, endLat, goalLng, goalLat);
+    private Path(int angle, double distance, Path parent) {
+        this.parent = parent;
+        var endLng = parent.position.longitude() + Math.cos(angle * Math.PI / 180.0) * distance;
+        var endLat = parent.position.latitude() + Math.sin(angle * Math.PI / 180.0) * distance;
+        position = Point.fromLngLat(endLng, endLat);
+        goal = parent.goal;
+        moveAngle = angle;
+        cost = parent.cost + distance;
+        heuristic = findDistance(position, goal);
     }
-    
-    public double getEndLng() {
-//        return endLng;
-        return positions.get(positions.size() - 1).longitude();
-    }
-    
-    public double getEndLat() {
-//        return endLat;
-        return positions.get(positions.size() - 1).latitude();
-    }
-    
-    public List<Integer> getMoves() {
-        return moves;
-    }
-    
-    public List<Point> getPositions() {
-        return positions;
-    }
-
-    public double getHeuristic() {
-        return heuristic;
-    } 
     
     public Path extend(int angle, double distance) {
         return new Path(angle, distance, this);
     }
     
-    private double findDistance(double startLng, double startLat, double endLng, double endLat) {
-        return Math.sqrt(Math.pow(startLng - endLng, 2) + Math.pow(startLat - endLat, 2));
+    public ArrayList<Point> getAllPositions() {
+        if (parent == null) {
+            return new ArrayList<Point>();
+        } 
+        var positions = parent.getAllPositions();
+        positions.add(position);
+        return positions;
+    }
+    
+    public List<Integer> getAllMoveAngles() {
+        if (parent == null) {
+            return new ArrayList<Integer>();
+        } 
+        var angles = parent.getAllMoveAngles();
+        angles.add(moveAngle);
+        return angles;
+    }
+    
+    public Point getEndPosition() {
+        return position;
+    }
+    
+    private double findDistance(Point start, Point end) {
+        return Math.sqrt(Math.pow(start.longitude() - end.longitude(), 2) + Math.pow(start.latitude() - end.latitude(), 2));
     }
 
     @Override

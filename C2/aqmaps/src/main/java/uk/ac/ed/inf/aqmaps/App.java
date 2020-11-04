@@ -29,8 +29,8 @@ public class App {
         double droneLng = 0;
         double droneLat = 0;
         try {
-            droneLng = Double.parseDouble(args[3]);
-            droneLat = Double.parseDouble(args[4]);
+            droneLng = Double.parseDouble(args[4]);
+            droneLat = Double.parseDouble(args[3]);
         } catch (Exception e) {
             //TODO Add error message
             System.exit(1);
@@ -40,7 +40,7 @@ public class App {
         
         var sensors = getSensors(day, month, year, webserver);
         var noFlyZones = getNoFlyZones(day, month, year, webserver);
-        Drone drone = new Drone(droneLng, droneLat, DRONE_MOVE_DISTANCE, READ_DISTANCE, ENDING_DISTANCE, MAX_MOVES);
+        Drone drone = new Drone(Point.fromLngLat(droneLng, droneLat), DRONE_MOVE_DISTANCE, READ_DISTANCE, ENDING_DISTANCE, MAX_MOVES);
         var dronePath = drone.visitSensors(sensors, noFlyZones);
         
         // TODO move writing output to new function(s), remove testing code
@@ -64,7 +64,9 @@ public class App {
 //                        + "HTTP status code: " + responce.statusCode() + "\nThis entry will be skipped.");
             } else {
                 What3WordsData sensorInfo = new Gson().fromJson(responce.body(), What3WordsData.class);
-                sensors.add(new Sensor(sensorInfo.getLng(), sensorInfo.getLat(), 
+//                sensors.add(new Sensor(sensorInfo.getLng(), sensorInfo.getLat(), 
+//                        entry.getBattery(), entry.getReading(), entry.getLocation()));
+                sensors.add(new Sensor(Point.fromLngLat(sensorInfo.getLng(), sensorInfo.getLat()), 
                         entry.getBattery(), entry.getReading(), entry.getLocation()));
             }
         }

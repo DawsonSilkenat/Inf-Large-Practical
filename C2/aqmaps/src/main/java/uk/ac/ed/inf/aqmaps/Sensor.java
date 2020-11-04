@@ -5,8 +5,9 @@ import com.mapbox.geojson.Feature;
 
 public class Sensor {
 
-    private double longitude;
-    private double latitude;
+//    private double longitude;
+//    private double latitude;
+    private Point position;
     private double batteryLife;
     private double minimumReliableBattery;
     private String reading;
@@ -15,10 +16,9 @@ public class Sensor {
     private String markerColor;
     private String markerSize;
 
-    public Sensor(double longitude, double latitude, double batteryLife, double minimumReliableBattery, String reading, 
+    public Sensor(Point position, double batteryLife, double minimumReliableBattery, String reading, 
             String what3words, String markerSymbol, String markerColor, String markerSize) {
-        this.longitude = longitude;
-        this.latitude = latitude;
+        this.position = position;
         this.batteryLife = batteryLife;
         this.minimumReliableBattery = minimumReliableBattery;
         this.reading = reading;
@@ -29,16 +29,12 @@ public class Sensor {
     }
     
     // Simplified constructor including default values for easier use
-    public Sensor(double longitude, double latitude, double batteryLife, String reading, String what3words) {
-        this(longitude, latitude, batteryLife, 10.0, reading, what3words, (String) null, "#aaaaaa", "medium");
+    public Sensor(Point position, double batteryLife, String reading, String what3words) {
+        this(position, batteryLife, 10.0, reading, what3words, (String) null, "#aaaaaa", "medium");
     }
     
-    public double getLongitude() {
-        return longitude;
-    }
-
-    public double getLatitude() {
-        return latitude;
+    public Point getPosition() {
+        return position;
     }
     
     public void visit() {
@@ -82,9 +78,8 @@ public class Sensor {
         }  
     }
     
-    // Returns the geojson feature representing this sensor
     public Feature toGeojsonFeature() {
-        Feature asGeoJson = Feature.fromGeometry(Point.fromLngLat(longitude, latitude));
+        Feature asGeoJson = Feature.fromGeometry(position);
         asGeoJson.addStringProperty("marker-size", markerSize);
         asGeoJson.addStringProperty("location", what3words);
         asGeoJson.addStringProperty("rgb-string", markerColor);
