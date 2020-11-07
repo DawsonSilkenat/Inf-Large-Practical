@@ -4,37 +4,39 @@ import com.mapbox.geojson.Point;
 import com.mapbox.geojson.Feature;
 
 public class Sensor {
-
-//    private double longitude;
-//    private double latitude;
+    
     private Point position;
     private double batteryLife;
     private double minimumReliableBattery;
     private String reading;
-    private String what3words;
+    private String whatThreeWords;
     private String markerSymbol;
     private String markerColor;
     private String markerSize;
 
     public Sensor(Point position, double batteryLife, double minimumReliableBattery, String reading, 
-            String what3words, String markerSymbol, String markerColor, String markerSize) {
+            String whatThreeWords, String markerSymbol, String markerColor, String markerSize) {
         this.position = position;
         this.batteryLife = batteryLife;
         this.minimumReliableBattery = minimumReliableBattery;
         this.reading = reading;
-        this.what3words = what3words;
+        this.whatThreeWords = whatThreeWords;
         this.markerSymbol = markerSymbol; 
         this.markerColor = markerColor;
         this.markerSize = markerSize;
     }
     
     // Simplified constructor including default values for easier use
-    public Sensor(Point position, double batteryLife, String reading, String what3words) {
-        this(position, batteryLife, 10.0, reading, what3words, (String) null, "#aaaaaa", "medium");
+    public Sensor(Point position, double batteryLife, String reading, String whatThreeWords) {
+        this(position, batteryLife, 10.0, reading, whatThreeWords, (String) null, "#aaaaaa", "medium");
     }
     
     public Point getPosition() {
         return position;
+    }
+    
+    public String getWhatThreeWords() {
+        return whatThreeWords;
     }
     
     public void visit() {
@@ -68,7 +70,7 @@ public class Sensor {
                 markerSymbol = "danger";
             } else {
                 // The reading should have been in one of these ranges, if not inform the user and leave marked as unvisited
-                System.out.println("The air quality reading was not within an excepted range for the sensor at " + what3words 
+                System.out.println("The air quality reading was not within an excepted range for the sensor at " + whatThreeWords 
                         + ". This sensor will not be marked as visited");
             }    
         } else {
@@ -81,7 +83,7 @@ public class Sensor {
     public Feature toGeojsonFeature() {
         Feature asGeoJson = Feature.fromGeometry(position);
         asGeoJson.addStringProperty("marker-size", markerSize);
-        asGeoJson.addStringProperty("location", what3words);
+        asGeoJson.addStringProperty("location", whatThreeWords);
         asGeoJson.addStringProperty("rgb-string", markerColor);
         asGeoJson.addStringProperty("marker-color", markerColor);
         if (markerSymbol != null) {

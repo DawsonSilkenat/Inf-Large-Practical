@@ -41,11 +41,17 @@ public class App {
         var sensors = getSensors(day, month, year, webserver);
         var noFlyZones = getNoFlyZones(day, month, year, webserver);
         Drone drone = new Drone(Point.fromLngLat(droneLng, droneLat), DRONE_MOVE_DISTANCE, READ_DISTANCE, ENDING_DISTANCE, MAX_MOVES);
-        var dronePath = drone.visitSensors(sensors, noFlyZones);
+        
+        
+        drone.testing(noFlyZones);
+        
+        drone.visitSensors(sensors, noFlyZones);
+        
+        
         
         // TODO move writing output to new function(s), remove testing code
-        writeAQMap(sensors, dronePath, noFlyZones);
-        
+        writeReadings(sensors, drone, noFlyZones);
+        writeFlightPath(drone, day, month, year);
     }
     
     private static List<Sensor> getSensors(String day, String month, String year, String webserver) throws IOException, InterruptedException {
@@ -118,11 +124,17 @@ public class App {
         return noFlyZones;
     }
     
-    private static void writeAQMap(List<Sensor> sensors, LineString dronePath, List<Polygon> noFlyZones) throws IOException {
+    private static void writeReadings(List<Sensor> sensors, Drone drone, List<Polygon> noFlyZones) throws IOException {
         var output = new FileWriter("aqmap.geojson");
         var geojson = new ArrayList<Feature>();
         
-        geojson.add(Feature.fromGeometry(dronePath));
+        var dronePath = new ArrayList<Point>();
+        dronePath.add(drone.getStartPosition());
+        for (Path path : drone.getVisitPaths()) {
+            dronePath.addAll(path.getPositions());
+        }
+        geojson.add(Feature.fromGeometry(LineString.fromLngLats(dronePath)));
+        
         for (Sensor sensor : sensors) {
             geojson.add(sensor.toGeojsonFeature());
         }
@@ -139,6 +151,34 @@ public class App {
         }
         
         output.write(FeatureCollection.fromFeatures(geojson).toJson());
+        output.close();
+    }
+    
+    private static void writeFlightPath(Drone drone, String day, String month, String year) throws IOException {
+        var output = new FileWriter("flightpath-" + day + "-" + month + "-" + year + ".txt");   
+        var n = 1;
+        var previousPosition = drone.getStartPosition();
+        var paths = drone.getVisitPaths();
+        var sensors = drone.getVisitOrder();
+        
+        for (int i = 0; i < paths.size(); i++) {
+            // These two lists always have the same size
+            var positions = paths.get(i).getPositions();
+            var angles = paths.get(i).getMoveAngles();
+            
+            for (int j = 0; j < positions.size(); j++) {
+                output.write(n + "," + previousPosition.longitude() + "," + previousPosition.latitude() + "," + angles.get(j)
+                    + "," + positions.get(j).longitude() + "," + positions.get(j).latitude());
+                if (j == positions.size() - 1 && i != paths.size() - 1) {
+                    output.write("," + sensors.get(i).getWhatThreeWords() + "\n");
+                } else {
+                    output.write(",null\n");
+                }
+                n++;
+                previousPosition = positions.get(j);
+            }
+        }
+        
         output.close();
     }
 }

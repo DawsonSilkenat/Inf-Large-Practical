@@ -1,24 +1,22 @@
 package uk.ac.ed.inf.aqmaps;
 
-import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
+import java.util.ArrayList;
 import java.util.PriorityQueue;
-
-import com.mapbox.geojson.LineString;
+import java.util.Comparator;
 import com.mapbox.geojson.Point;
 import com.mapbox.geojson.Polygon;
 
 public class Drone {
     
-//    private double longitude;
-//    private double latitude;
     private Point startPosition;
     private double moveDistance;
     private double readDistance;
     private double endingDistance;
     private int maxMoves;
     private int angleStepSize = 10;
+    private List<Path> visitPaths;
+    private List<Sensor> visitOrder;
     
     public Drone(Point startPosition, double moveDistance, double readDistance, double endingDistance, int maxMoves) {
         this.startPosition = startPosition;
@@ -26,130 +24,80 @@ public class Drone {
         this.readDistance = readDistance;
         this.endingDistance = endingDistance;
         this.maxMoves = maxMoves;
+        visitPaths = new ArrayList<>();
+        visitOrder = new ArrayList<>();
     }
     
-    public LineString visitSensors(List<Sensor> sensors, List<Polygon> noFlyZones) {
-        var visitOrder = selectVistOrder(sensors, noFlyZones);
-        
-//        var paths = new ArrayList<Path>();
-        var paths = new ArrayList<Point[]>();
+    public void visitSensors(List<Sensor> sensors, List<Polygon> noFlyZones) {
+        visitOrder = selectVistOrder(sensors, noFlyZones);
+        visitPaths = new ArrayList<Path>();
         var currentPosition = startPosition;
         
         for (Sensor sensor : visitOrder) {
             var path = findPath(currentPosition, sensor.getPosition(), readDistance, 1, noFlyZones);
-//            currentPosition = path.getEndPosition();
-            currentPosition = path[path.length - 1];
-            paths.add(path);
-            sensor.visit();   
+            if (path != null) {
+                currentPosition = path.getEndPosition();
+                visitPaths.add(path);
+                sensor.visit();  
+            } 
         }
-        paths.add(findPath(currentPosition, startPosition, endingDistance, 0, noFlyZones));
-        
-        var asGeoJason = new ArrayList<Point>();
-        
-        asGeoJason.add(startPosition);
-        for (Point[] path : paths) {
-            for (int i = 1; i < path.length; i++) {
-                asGeoJason.add(path[i]);
-            }
-        }
-//        for (Path path : paths) {
-//            asGeoJason.addAll(path.getAllPositions());
-//        }
-        
-        return LineString.fromLngLats(asGeoJason);        
+        visitPaths.add(findPath(currentPosition, startPosition, endingDistance, 0, noFlyZones));      
     }
     
-    
-//    private Path findPath(Point start, Point goal, double acceptableError, int minMoves, List<Polygon> noFlyZones) {
-//        var searchSpace = new PriorityQueue<Path>();
-//        searchSpace.add(new Path(start, goal));
-//        
-//        while (!searchSpace.isEmpty()) {
-//            var currentPath = searchSpace.poll();
-//            if (getDistance(currentPath.getEndPosition(), goal) <= acceptableError && currentPath.getAllPositions().size() >= minMoves) {
-//                searchSpace.clear();
-//                return currentPath;
-//            }
-//            
-//            for (int angle = 0; angle < 360; angle += angleStepSize) {
-//                var extendedPath = currentPath.extend(angle, moveDistance);
-//                
-//                if (checkMoveLegality(currentPath.getEndPosition(), extendedPath.getEndPosition(), noFlyZones) && 
-//                        extendedPath.getAllPositions().size() < maxMoves) {
-//                    searchSpace.add(extendedPath);
-//                } 
-//            }
-//        }
-//        
-//        return null; 
-//    }
-    
-    private Point[] findPath(Point start, Point goal, double acceptableError, int minMoves, List<Polygon> noFlyZones) {
-        var spaceLimit = 100;
-        
-        var arrayCompare = new Comparator<Point[]>() {
+    public Point getStartPosition() {
+        return startPosition;
+    }
+
+    public List<Path> getVisitPaths() {
+        return visitPaths;
+    }
+
+    public List<Sensor> getVisitOrder() {
+        return visitOrder;
+    }
+      
+    private Path findPath(Point start, Point goal, double acceptableError, int minMoves, List<Polygon> noFlyZones) {
+        var beamWidth = 50;
+        var comparator = new Comparator<Path>() {
             @Override
-            // Doesn't cover the empty array, but shouldn't matter for this use
-            public int compare(Point[] path1, Point[] path2) {
-                var estimate_1 = path1.length * moveDistance + getDistance(path1[path1.length - 1], goal);
-                var estimate_2 = path2.length * moveDistance + getDistance(path2[path2.length - 1], goal);
-                if (estimate_1 < estimate_2) {
-                    return -1;
-                } else if(estimate_1 > estimate_2) {
-                    return 1;
-                }
-                return 0;
-            }};
+            public int compare(Path path1, Path path2) {
+                var cost1 = path1.getPositions().size();
+                var heuristic1 = (int) Math.ceil((getDistance(path1.getEndPosition(), goal) - acceptableError) / moveDistance);
+                var cost2 = path2.getPositions().size();
+                var heuristic2 = (int) Math.ceil((getDistance(path2.getEndPosition(), goal) - acceptableError) / moveDistance);
+                
+                return (cost1 + heuristic1) - (cost2 + heuristic2);
+            }
+        };
         
-        var searchSpace = new PriorityQueue<>(arrayCompare);
-        
-        searchSpace.add(new Point[] {start});
+        var searchSpace = new PriorityQueue<Path>(comparator);
+        searchSpace.add(new Path(start));
         
         while (!searchSpace.isEmpty()) {
-            var currrentPath = searchSpace.poll();
-            
-            if (getDistance(currrentPath[currrentPath.length - 1], goal) <= acceptableError && currrentPath.length > minMoves) {
-                return currrentPath;
-            } else {
-                var pathCopy = new Point[currrentPath.length + 1];
-                for (int i = 0; i < currrentPath.length; i++) {
-                    pathCopy[i] = currrentPath[i];
-                }
-                
-                var moveSpace = new PriorityQueue<>(arrayCompare);
-                
-                for (int angle = 0; angle < 360; angle += angleStepSize) {
-                    // Shallow copy is fine here
-                    var extendedPath = pathCopy.clone();
-                    extendedPath[extendedPath.length - 1] = Point.fromLngLat(
-                            currrentPath[currrentPath.length - 1].longitude() + Math.cos(angle * Math.PI / 180.0) * moveDistance, 
-                            currrentPath[currrentPath.length - 1].latitude() + Math.sin(angle * Math.PI / 180.0) * moveDistance);
-                    
-                    if (checkMoveLegality(extendedPath[extendedPath.length - 2], extendedPath[extendedPath.length - 1], noFlyZones)) {
-                        moveSpace.add(extendedPath);
-                    }
-  
-                }
-                
-                var spaceLimiting = new PriorityQueue<>(arrayCompare);
-                
-                for (int i = 0; i < spaceLimit; i++) {
-                    if (searchSpace.isEmpty() && moveSpace.isEmpty()) {
-                        break;
-                    } else if (!searchSpace.isEmpty() && (moveSpace.isEmpty() || arrayCompare.compare(searchSpace.peek(), moveSpace.peek()) < 0)) {
-                        spaceLimiting.add(searchSpace.poll());
-                    } else {
-                        spaceLimiting.add(moveSpace.poll());
-                    }  
-                }
-                
-                searchSpace = spaceLimiting;
+            var currentPath = searchSpace.poll();
+            if (getDistance(currentPath.getEndPosition(), goal) <= acceptableError && 
+                    currentPath.getPositions().size() >= minMoves) {
+                return currentPath;
             }
+            
+            for (int angle = 0; angle < 360; angle += angleStepSize) {
+                var extendedPath = currentPath.extend(angle, moveDistance);
+                
+                if (checkMoveLegality(currentPath.getEndPosition(), extendedPath.getEndPosition(), noFlyZones) && 
+                        extendedPath.getPositions().size() < maxMoves) {
+                    searchSpace.add(extendedPath);
+                } 
+            }
+            
+            var beam = new PriorityQueue<Path>(comparator);
+            for (int i = 0; i < beamWidth && !searchSpace.isEmpty(); i++) {
+                beam.add(searchSpace.poll());
+            }
+            searchSpace = beam;
         }
         
-        return null;
-    }
-    
+        return null; 
+    } 
     
     /*
      * Solve the travelling salesperson problem using straight line distance between sensors (plus start point)
@@ -158,27 +106,17 @@ public class Drone {
      */
     private List<Sensor> selectVistOrder(List<Sensor> sensors, List<Polygon> noFlyZones) { 
         var order = new ArrayList<Sensor>();
-//        var distances = new double[sensors.size() + 1][sensors.size() + 1];
-//        
-//        for (int i = 0; i < distances.length - 1; i++) {
-//            distances[i][distances.length - 1] = getDistance(sensors.get(i).getPosition(), startPosition);
-//            distances[distances.length - 1][i] = distances[i][distances.length - 1];
-//        }
-//        for (int i = 0; i < distances.length - 2; i++) {
-//            for (int j = i + 1; j < distances.length - 1; j++) {
-//                distances[i][j] = getDistance(sensors.get(i).getPosition(), sensors.get(j).getPosition());
-//                distances[j][i] = distances[i][j];
-//            }
-//        }
         var distances = new int[sensors.size() + 1][sensors.size() + 1];
         
         for (int i = 0; i < distances.length - 1; i++) {
-            distances[i][distances.length - 1] = findPath(startPosition, sensors.get(i).getPosition(), readDistance, 1, noFlyZones).length;
+            distances[i][distances.length - 1] = findPath(startPosition, sensors.get(i).getPosition(), 
+                    readDistance, 1, noFlyZones).getPositions().size();
             distances[distances.length - 1][i] = distances[i][distances.length - 1];
         }
         for (int i = 0; i < distances.length - 2; i++) {
             for (int j = i + 1; j < distances.length - 1; j++) {
-                distances[i][j] = findPath(sensors.get(i).getPosition(), sensors.get(j).getPosition(), readDistance, 1, noFlyZones).length;
+                distances[i][j] = findPath(sensors.get(i).getPosition(), sensors.get(j).getPosition(), 
+                        readDistance, 1, noFlyZones).getPositions().size();
                 distances[j][i] = distances[i][j];
             }
         }
@@ -201,7 +139,7 @@ public class Drone {
     /*
      * We are using the 2-opt method to find a good solution to the travelling salesperson problem
      * It works by taking an initial choice of solution and improving it by reversing segments where doing so reduce 
-     * the total length of the solution. It does this until it can't find any more swaps which improve the solution.  
+     * the total length of the solution. It does this until it can't find any more which improve the solution.  
      */
     private int[] twoOpt(int[][] distances) {
         var indices = new int[distances.length];
@@ -214,8 +152,10 @@ public class Drone {
             improvement = false;
             for (int i = 0; i < indices.length - 2; i++) {
                 for (int j = i + 1; j < indices.length - 1; j++) {
-                    if (distances[indices[(i - 1 + indices.length) % indices.length]][indices[j]] + distances[indices[i]][indices[j + 1]] < 
-                                  distances[indices[(i - 1 + indices.length) % indices.length]][indices[i]] + distances[indices[j]][indices[j + 1]]) {
+                    if (distances[indices[(i - 1 + indices.length) % indices.length]][indices[j]] + 
+                            distances[indices[i]][indices[(j + 1) % indices.length]] < 
+                            distances[indices[(i - 1 + indices.length) % indices.length]][indices[i]] + 
+                            distances[indices[j]][indices[(j + 1) % indices.length]]) {
                         
                         improvement = true;
                         for (int i2 = i, j2 = j; i2 < j2; i2++, j2--) {
@@ -231,9 +171,14 @@ public class Drone {
         return indices;
     }
     
+    public void testing(List<Polygon> noFlyZones) {
+//        var start = Point.fromLngLat(-3.187204557674096, 55.944452094453304);
+//        var end = Point.fromLngLat(-3.186904557674096,55.944452094453304);
+//        System.out.println(checkMoveLegality(start, end, noFlyZones));
+//        System.exit(0);
+    }
     
     // Checks whether the straight line move from the first pair of coordinates to the second is legal
-    // TODO debug
     private boolean checkMoveLegality(Point start, Point end, List<Polygon> noFlyZones) {
         var startLng = start.longitude();
         var startLat = start.latitude();
@@ -241,7 +186,17 @@ public class Drone {
         var endLat = end.latitude();
         // TODO Check if within confinement area
         
+        
+        
+        // Note that we are using the equation ax + by + c = 0 as either a or b could be 0. x axis is longitude, y latitude 
+        var a1 = startLat - endLat;
+        var b1 = endLng - startLng;
+        var c1 = -(startLng * a1) - (startLat * b1); 
+        
+//        System.out.println(a1 + " " + b1 + " " + c1);
+        
         for (Polygon zone : noFlyZones) {
+            var floatOffset = 1e-10;
             var boundary = zone.outer().coordinates();
             // Easiest way to check if the move enters the zone is to find where it intersects with an edge
             for (int i = 0; i < boundary.size() - 1; i++) {
@@ -251,35 +206,45 @@ public class Drone {
                 var edgeLat1 = boundary.get(i).latitude();
                 var edgeLng2 = boundary.get(i + 1).longitude();
                 var edgeLat2 = boundary.get(i + 1).latitude();
+
                 
-                // Note that we are using the equation ax + by + c = 0 as either a or b could be 0. x axis is longitude, y latitude 
-                var a1 = endLat - startLat;
-                var b1 = startLng - endLng;
-                var c1 = -(startLng * a1) - (startLat * b1); 
-                
-                var a2 = edgeLat2 - edgeLat1;
-                var b2 = edgeLng1 - edgeLng2;
+                var a2 = edgeLat1 - edgeLat2;
+                var b2 = edgeLng2 - edgeLng1;
                 var c2 = -(edgeLng1 * a2) - (edgeLat1 * b2);
+                
+//                System.out.println(a2 + " " + b2 + " " + c2);
                 
                 // Can be shown this is the solution for the point of intersection if the lines aren't parallel
                 if ((a1 * b2) - (a2 * b1) != 0) {
                     var pointLng = ((b1 * c2) - (b2 * c1)) / ((a1 * b2) - (a2 * b1));
                     var pointLat = ((a2 * c1) - (a1 * c2)) / ((a1 * b2) - (a2 * b1));
                     
+//                    System.out.println("This case!");
+//                    System.out.println(pointLng + " " + pointLat);
+//                    System.out.println(Point.fromLngLat(pointLng, pointLat).toJson());
+                    
+//                    System.out.println(pointLng >= Math.min(startLng, endLng) && pointLng <= Math.max(startLng, endLng));
+//                    System.out.println(pointLat >= Math.min(startLat, endLat) && pointLat <= Math.max(startLat, endLat));
+//                    System.out.println(pointLat >= Math.min(startLat, endLat));
+//                    System.out.println(pointLat + " " + Math.min(startLat, endLat) + " " + (pointLat - Math.min(startLat, endLat)));
+//                    System.out.println(pointLat <= Math.max(startLat, endLat));
+//                    System.out.println(pointLng >= Math.min(edgeLng1, edgeLng2) && pointLng <= Math.max(edgeLng1, edgeLng2));
+//                    System.out.println(pointLat >= Math.min(edgeLat1, edgeLat2) && pointLat <= Math.max(edgeLat1, edgeLat2));
+                    
                     // Check if the intersect point lies on both line segments. If so the move isn't legal
-                    if (pointLng >= Math.min(startLng, endLng) && pointLng <= Math.max(startLng, endLng) &&
-                            pointLat >= Math.min(startLat, endLat) && pointLat <= Math.max(startLat, endLat) &&
-                            pointLng >= Math.min(edgeLng1, edgeLng2) && pointLng <= Math.max(edgeLng1, edgeLng2) &&
-                            pointLat >= Math.min(edgeLat1, edgeLat2) && pointLat <= Math.max(edgeLat1, edgeLat2)) {
+                    if (pointLng + floatOffset >= Math.min(startLng, endLng) && pointLng - floatOffset <= Math.max(startLng, endLng) &&
+                            pointLat + floatOffset >= Math.min(startLat, endLat) && pointLat - floatOffset <= Math.max(startLat, endLat) &&
+                            pointLng + floatOffset >= Math.min(edgeLng1, edgeLng2) && pointLng - floatOffset <= Math.max(edgeLng1, edgeLng2) &&
+                            pointLat + floatOffset >= Math.min(edgeLat1, edgeLat2) && pointLat - floatOffset <= Math.max(edgeLat1, edgeLat2)) {
                         return false;
                     }
                 } else if ((b2 * c1) - (b1 * c2) == 0 && (a2 * c1) - (a1 * c2) == 0 &&
-                        ((edgeLng1 >= Math.min(startLng, endLng) && edgeLng1 <= Math.max(startLng, endLng) && 
-                          edgeLat1 >= Math.min(startLat, endLat) && edgeLat1 <= Math.max(startLat, endLat)) ||
-                        ( edgeLng2 >= Math.min(startLng, endLng) && edgeLng2 <= Math.max(startLng, endLng) && 
-                          edgeLat2 >= Math.min(startLat, endLat) && edgeLat2 <= Math.max(startLat, endLat)))) {
+                        ((edgeLng1 + floatOffset >= Math.min(startLng, endLng) && edgeLng1 - floatOffset <= Math.max(startLng, endLng) && 
+                          edgeLat1 + floatOffset >= Math.min(startLat, endLat) && edgeLat1 - floatOffset <= Math.max(startLat, endLat)) ||
+                        ( edgeLng2 + floatOffset >= Math.min(startLng, endLng) && edgeLng2 - floatOffset <= Math.max(startLng, endLng) && 
+                          edgeLat2 + floatOffset >= Math.min(startLat, endLat) && edgeLat2 - floatOffset <= Math.max(startLat, endLat)))) {
                     return false;
-                }  
+                }
             }
         }
         // If we haven't found a reason for the move to be illegal, it is considered legal
@@ -288,8 +253,7 @@ public class Drone {
     
     private double getDistance(Point start, Point end) {     
         return Math.sqrt(Math.pow(start.longitude() - end.longitude(), 2) + Math.pow(start.latitude() - end.latitude(), 2));
-    }
-    
+    }   
 }
 
 
