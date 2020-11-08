@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.ArrayList;
 import java.util.PriorityQueue;
 import java.util.Comparator;
+
 import com.mapbox.geojson.Point;
 import com.mapbox.geojson.Polygon;
 
@@ -17,7 +18,6 @@ public class Drone {
     private int angleStepSize = 10;
     private List<Path> visitPaths;
     private List<Sensor> visitOrder;
-    
     private double minLongitude;
     private double maxLongitude;
     private double minLatitude;
@@ -39,20 +39,155 @@ public class Drone {
     }
     
     public void visitSensors(List<Sensor> sensors, List<Polygon> noFlyZones) {
-        var currentPosition = startPosition;
-        var numberOfMoves = 0;
-        visitOrder = selectVistOrder(sensors, noFlyZones);
+        var moveEstimates = getMoveEstimates(sensors, noFlyZones);
+        visitOrder = selectVistOrder(sensors, moveEstimates);
         visitPaths = new ArrayList<Path>();
         
-        for (Sensor sensor : visitOrder) {
-            var path = findPath(currentPosition, sensor.getPosition(), readDistance, 1, noFlyZones);
-            if (path != null) {
-                currentPosition = path.getEndPosition();
-                visitPaths.add(path);
-                sensor.visit();  
-            } 
+        var updatedOrder = true;
+        while (updatedOrder) {
+            updatedOrder = false;
+            
+            var currentPosition = startPosition;
+            if (visitPaths.size() > 0) {
+                currentPosition = visitPaths.get(visitPaths.size() - 1).getEndPosition();
+            }
+            
+            
+            // TODO update this to work when the visit order doesn't start from 0
+            var startIndex = visitPaths.size();
+            for (int i = startIndex; i < visitOrder.size(); i++) {
+                var sensor = visitOrder.get(i);
+                var path = findPath(currentPosition, sensor.getPosition(), readDistance, 1, noFlyZones);
+                if (path != null) {
+                    currentPosition = path.getEndPosition();
+                    visitPaths.add(path);
+                } else {
+                    visitOrder.remove(i);
+                    i--;
+                }
+            }   
+            // Always possible to return to start, so no need to check for null
+            visitPaths.add(findPath(currentPosition, startPosition, endingDistance, 0, noFlyZones));
+            
+            var numberOfMoves = 0;
+            for (Path path : visitPaths) {
+                numberOfMoves += path.getPositions().size();
+            }
+            
+            // We remove sensors from our visit list in a greedy manner to reduce the number of moves below maximum
+            if (numberOfMoves > maxMoves) {
+                updatedOrder = true;
+                
+                if (visitOrder.size() <= 1) {
+                    visitOrder = new ArrayList<>();
+                } else {
+                    var droneIndex = moveEstimates.length - 1;
+                    var bestDropIndex = 0;
+                    var bestDropGain = visitPaths.get(0).getPositions().size() + visitPaths.get(1).getPositions().size() 
+                            - moveEstimates[droneIndex][sensors.indexOf(visitOrder.get(1))];
+                    
+                    for (int i = 1; i < visitOrder.size() - 1; i++) {
+                        var thisDropGain = visitPaths.get(i).getPositions().size() + visitPaths.get(i + 1).getPositions().size() 
+                                - moveEstimates[sensors.indexOf(visitOrder.get(i - 1))][sensors.indexOf(visitOrder.get(i + 1))];
+                        
+                        if (thisDropGain >= bestDropGain) {
+                            bestDropGain = thisDropGain;
+                            bestDropIndex = i;
+                        }
+                    }
+                    
+                    var thisDropGain = visitPaths.get(visitPaths.size() - 2).getPositions().size() +  visitPaths.get(visitPaths.size() - 1).getPositions().size() 
+                            - moveEstimates[sensors.indexOf(visitOrder.get(visitOrder.size() - 2))][droneIndex];
+
+                    if (thisDropGain > bestDropGain) {
+                        bestDropIndex = visitPaths.size() - 2;
+                    }
+                    
+                    visitOrder.remove(bestDropIndex);
+                    visitPaths.subList(bestDropIndex, visitPaths.size()).clear();
+                    
+                    System.out.println(visitPaths.size() + " " + bestDropIndex + " " + bestDropGain);
+                }
+
+            }
         }
-        visitPaths.add(findPath(currentPosition, startPosition, endingDistance, 0, noFlyZones));  
+        
+        for (Sensor sensor : visitOrder) {
+            sensor.visit();
+        }
+    }
+
+//    private int findBestReduction(List<Polygon> noFlyZones) {
+//        // Only way to reduce is to visit no sensors
+//        if (visitOrder.size() <= 1) {
+//            return -1;
+//        }
+//        
+//        var removeMoves = new int[visitOrder.size()];
+//        removeMoves[0] = visitPaths.get(0).getPositions().size() + visitPaths.get(1).getPositions().size();
+//        var alternativePath = findPath(startPosition, visitOrder.get(1).getPosition(), readDistance, 1, noFlyZones);
+//        
+//        if (alternativePath != null) {
+//            removeMoves[0] -= alternativePath.getPositions().size();
+//        } else {
+//            removeMoves[0] = Integer.MIN_VALUE;
+//        }
+//        
+//        for (int i = 1; i < removeMoves.length - 1; i++) {
+//            removeMoves[i] = visitPaths.get(i).getPositions().size() + visitPaths.get(i + 1).getPositions().size();
+//            alternativePath = findPath(visitOrder.get(i - 1).getPosition(), visitOrder.get(i + 1).getPosition(), readDistance, 1, noFlyZones);
+//            if (alternativePath != null) {
+//                removeMoves[i] -= alternativePath.getPositions().size();
+//            } else {
+//                removeMoves[i] = Integer.MIN_VALUE;
+//            }                
+//        }
+//        
+//        removeMoves[removeMoves.length - 1] = visitPaths.get(removeMoves.length - 1).getPositions().size() + 
+//                visitPaths.get(removeMoves.length).getPositions().size();
+//        alternativePath = findPath(visitOrder.get(removeMoves.length - 1).getPosition(), startPosition, endingDistance, 0, noFlyZones);
+//        if (alternativePath != null) {
+//            removeMoves[removeMoves.length - 1] -= alternativePath.getPositions().size();
+//        } else {
+//            removeMoves[removeMoves.length - 1] = Integer.MIN_VALUE;
+//        }
+//        
+//        int bestRemove = 0;
+//        for (int i = 1; i < removeMoves.length; i++) {
+//            if (removeMoves[bestRemove] < removeMoves[i]) {
+//                bestRemove = i;
+//            }
+//        }
+//        
+//        return bestRemove;
+//    }
+    
+    private int[][] getMoveEstimates(List<Sensor> sensors, List<Polygon> noFlyZones) { 
+        var estimates = new int[sensors.size() + 1][sensors.size() + 1];
+        
+        for (int i = 0; i < estimates.length - 2; i++) {
+            for (int j = i + 1; j < estimates.length - 1; j++) {
+                var path = findPath(sensors.get(i).getPosition(), sensors.get(j).getPosition(), readDistance, 1, noFlyZones);
+                if (path == null) {
+                    estimates[i][j] = Integer.MAX_VALUE / 10;
+                } else {
+                    estimates[i][j] = path.getPositions().size();
+                }
+                estimates[j][i] = estimates[i][j];
+            }
+        }
+        
+        for (int i = 0; i < estimates.length - 1; i++) {
+            var path = findPath(startPosition, sensors.get(i).getPosition(), readDistance, 1, noFlyZones);
+            if (path == null) {
+                estimates[i][estimates.length - 1] = Integer.MAX_VALUE / 10;
+            } else {
+                estimates[i][estimates.length - 1] = path.getPositions().size();
+            }
+            estimates[estimates.length - 1][i] = estimates[i][estimates.length - 1];
+        }
+        
+        return estimates;
     }
     
     public Point getStartPosition() {
@@ -72,29 +207,38 @@ public class Drone {
      * This visit order becomes our estimate of the optimal order to visit the sensors
      * Going to start with 2-opt method, might change later. 
      */
-    private List<Sensor> selectVistOrder(List<Sensor> sensors, List<Polygon> noFlyZones) { 
+    private List<Sensor> selectVistOrder(List<Sensor> sensors, int[][] distanceEstimates) { 
         var order = new ArrayList<Sensor>();
+//        var distances = new int[sensors.size() + 1][sensors.size() + 1];
+//        
+//        for (int i = 0; i < distances.length - 2; i++) {
+//            for (int j = i + 1; j < distances.length - 1; j++) {
+//                var path = findPath(sensors.get(i).getPosition(), sensors.get(j).getPosition(), readDistance, 1, noFlyZones);
+//                if (path == null) {
+//                    distances[i][j] = Integer.MAX_VALUE / 10;
+//                } else {
+//                    distances[i][j] = path.getPositions().size();
+//                }
+//                distances[j][i] = distances[i][j];
+//            }
+//        }
+//        
+//        for (int i = 0; i < distances.length - 1; i++) {
+//            var path = findPath(startPosition, sensors.get(i).getPosition(), readDistance, 1, noFlyZones);
+//            if (path == null) {
+//                distances[i][distances.length - 1] = Integer.MAX_VALUE / 10;
+//            } else {
+//                distances[i][distances.length - 1] = path.getPositions().size();
+//            }
+//            distances[distances.length - 1][i] = distances[i][distances.length - 1];
+//        }
         
-        
-        var distances = new int[sensors.size() + 1][sensors.size() + 1];
-        for (int i = 0; i < distances.length - 1; i++) {
-            distances[i][distances.length - 1] = findPath(startPosition, sensors.get(i).getPosition(), 
-                    readDistance, 1, noFlyZones).getPositions().size();
-            distances[distances.length - 1][i] = distances[i][distances.length - 1];
-        }
-        for (int i = 0; i < distances.length - 2; i++) {
-            for (int j = i + 1; j < distances.length - 1; j++) {
-                distances[i][j] = findPath(sensors.get(i).getPosition(), sensors.get(j).getPosition(), 
-                        readDistance, 1, noFlyZones).getPositions().size();
-                distances[j][i] = distances[i][j];
-            }
-        }
-        
-        var indices = twoOpt(distances);
+        var indices = twoOpt(distanceEstimates);
         int droneIndex = 0;
         for (int i = 0; i < indices.length; i++) {
-            if (indices[i] == distances.length - 1) {
+            if (indices[i] == distanceEstimates.length - 1) {
                 droneIndex = i;
+                break;
             }
         }
         
@@ -104,6 +248,8 @@ public class Drone {
         
         return order;
     }
+    
+    
 
     private Path findPath(Point start, Point goal, double acceptableError, int minMoves, List<Polygon> noFlyZones) {
         var beamWidth = 250;
