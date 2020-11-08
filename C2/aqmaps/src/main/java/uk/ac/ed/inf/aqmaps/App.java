@@ -17,12 +17,18 @@ import java.util.List;
 
 public class App {
     
-    private static double DRONE_MOVE_DISTANCE = 0.0003;
-    private static double READ_DISTANCE = 0.0002;
-    private static double ENDING_DISTANCE = 0.0003;
-    private static int MAX_MOVES = 150;
+    private static final double DRONE_MOVE_DISTANCE = 0.0003;
+    private static final double READ_DISTANCE = 0.0002;
+    private static final double ENDING_DISTANCE = 0.0003;
+    private static final int MAX_MOVES = 150;
+    private static final double MINIMUM_LONGITUDE = -3.192473;
+    private static final double MAXIMUM_LONGITUDE = -3.184319;
+    private static final double MINIMUM_LATITUDE = 55.942617;
+    private static final double MAXIMUM_LATITUDE = 55.946233;
     
     public static void main(String[] args) throws IOException, InterruptedException {
+        var startTime = System.currentTimeMillis();
+        
         var day = args[0];
         var month = args[1];
         var year = args[2];
@@ -40,18 +46,24 @@ public class App {
         
         var sensors = getSensors(day, month, year, webserver);
         var noFlyZones = getNoFlyZones(day, month, year, webserver);
-        Drone drone = new Drone(Point.fromLngLat(droneLng, droneLat), DRONE_MOVE_DISTANCE, READ_DISTANCE, ENDING_DISTANCE, MAX_MOVES);
         
+        var readTime = System.currentTimeMillis();
         
-        drone.testing(noFlyZones);
-        
+        Drone drone = new Drone(Point.fromLngLat(droneLng, droneLat), DRONE_MOVE_DISTANCE, READ_DISTANCE, ENDING_DISTANCE, MAX_MOVES, 
+                MINIMUM_LONGITUDE, MAXIMUM_LONGITUDE, MINIMUM_LATITUDE, MAXIMUM_LATITUDE);
         drone.visitSensors(sensors, noFlyZones);
         
+        var droneTime = System.currentTimeMillis();
         
-        
-        // TODO move writing output to new function(s), remove testing code
-        writeReadings(sensors, drone, noFlyZones);
+        writeReadings(sensors, drone, noFlyZones, day, month, year);
         writeFlightPath(drone, day, month, year);
+        
+        var writeTime = System.currentTimeMillis();
+        
+        System.out.println((readTime - startTime)/1000.0);
+        System.out.println((droneTime - readTime)/1000.0);
+        System.out.println((writeTime - droneTime)/1000.0);
+        System.out.println((writeTime - startTime)/1000.0);
     }
     
     private static List<Sensor> getSensors(String day, String month, String year, String webserver) throws IOException, InterruptedException {
@@ -124,8 +136,9 @@ public class App {
         return noFlyZones;
     }
     
-    private static void writeReadings(List<Sensor> sensors, Drone drone, List<Polygon> noFlyZones) throws IOException {
-        var output = new FileWriter("aqmap.geojson");
+    private static void writeReadings(List<Sensor> sensors, Drone drone, List<Polygon> noFlyZones, 
+            String day, String month, String year) throws IOException {
+        var output = new FileWriter("readings-" + day + "-" + month + "-" + year + ".geojson");
         var geojson = new ArrayList<Feature>();
         
         var dronePath = new ArrayList<Point>();
@@ -143,11 +156,11 @@ public class App {
             var asFeature = Feature.fromGeometry(zone);
             asFeature.addStringProperty("fill", "#ff0000");
             geojson.add(asFeature);
-            for (int i = 0; i < zone.outer().coordinates().size() - 1; i++) {
-                var p = Feature.fromGeometry(zone.outer().coordinates().get(i));
-                p.addStringProperty("marker-color", "#ff0000");
-                geojson.add(p);
-            }
+//            for (int i = 0; i < zone.outer().coordinates().size() - 1; i++) {
+//                var p = Feature.fromGeometry(zone.outer().coordinates().get(i));
+//                p.addStringProperty("marker-color", "#ff0000");
+//                geojson.add(p);
+//            }
         }
         
         output.write(FeatureCollection.fromFeatures(geojson).toJson());

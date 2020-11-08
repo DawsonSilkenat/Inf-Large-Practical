@@ -28,7 +28,7 @@ public class Sensor {
     
     // Simplified constructor including default values for easier use
     public Sensor(Point position, double batteryLife, String reading, String whatThreeWords) {
-        this(position, batteryLife, 10.0, reading, whatThreeWords, (String) null, "#aaaaaa", "medium");
+        this(position, batteryLife, 10.0, reading, whatThreeWords, "", "#aaaaaa", "medium");
     }
     
     public Point getPosition() {
@@ -69,9 +69,11 @@ public class Sensor {
                 markerColor = "#ff0000";
                 markerSymbol = "danger";
             } else {
-                // The reading should have been in one of these ranges, if not inform the user and leave marked as unvisited
+                // The reading should have been in one of these ranges, if not inform the user and mark the sensor as abnormal
+                var abnormalMarker = "roadblock";
                 System.out.println("The air quality reading was not within an excepted range for the sensor at " + whatThreeWords 
-                        + ". This sensor will not be marked as visited");
+                        + ".\nThis sensor will be marked with the " + abnormalMarker + " symbol.");
+                markerSymbol = abnormalMarker;
             }    
         } else {
             // We don't believe the reading to be accurate, so ignore reading and mark for battery replacement
@@ -86,9 +88,7 @@ public class Sensor {
         asGeoJson.addStringProperty("location", whatThreeWords);
         asGeoJson.addStringProperty("rgb-string", markerColor);
         asGeoJson.addStringProperty("marker-color", markerColor);
-        if (markerSymbol != null) {
-            asGeoJson.addStringProperty("marker-symbol", markerSymbol);
-        }
+        asGeoJson.addStringProperty("marker-symbol", markerSymbol);
         return asGeoJson;
     }   
 }
