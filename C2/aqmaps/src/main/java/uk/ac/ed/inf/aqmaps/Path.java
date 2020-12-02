@@ -18,13 +18,16 @@ public class Path {
     private Path(int angle, double distance, Path parent) {
         var endLng = parent.getEndPosition().longitude() + Math.cos(angle * Math.PI / 180.0) * distance;
         var endLat = parent.getEndPosition().latitude() + Math.sin(angle * Math.PI / 180.0) * distance;
+        
         movePositions = new ArrayList<>();
         movePositions.addAll(parent.movePositions);
         movePositions.add(Point.fromLngLat(endLng, endLat));
+        
         moveAngles = new ArrayList<>();
         moveAngles.addAll(parent.moveAngles);
         moveAngles.add(angle);
     }
+    
     
     public Path extend(int angle, double distance) {
         return new Path(angle, distance, this);
@@ -38,6 +41,7 @@ public class Path {
         return moveAngles;
     }
     
+    // The end position of a path is either the last element of move positions or the starting position if no moves have been made
     public Point getEndPosition() {
         if (movePositions.size() == 0) {
             return start;
