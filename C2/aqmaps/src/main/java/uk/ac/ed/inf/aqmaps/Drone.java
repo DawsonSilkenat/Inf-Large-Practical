@@ -282,8 +282,7 @@ public class Drone {
             var currentPath = searchSpace.poll();
             
             // If we have found a path which is better than all other paths in the search space which reaches the goal we are done
-            if (getDistance(currentPath.getEndPosition(), goal) <= acceptableError && 
-                    currentPath.getPositions().size() >= minMoves) {
+            if (getDistance(currentPath.getEndPosition(), goal) <= acceptableError && currentPath.getPositions().size() >= minMoves) {  
                 return currentPath;
             }
             
