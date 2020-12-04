@@ -15,6 +15,7 @@ public class Path {
         moveAngles = new ArrayList<>();
     }
     
+    // Note that this constructor is private, it is intended to be accessed through the extend method
     private Path(int angle, double distance, Path parent) {
         var endLng = parent.getEndPosition().longitude() + Math.cos(angle * Math.PI / 180.0) * distance;
         var endLat = parent.getEndPosition().latitude() + Math.sin(angle * Math.PI / 180.0) * distance;

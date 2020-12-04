@@ -42,7 +42,7 @@ public class Sensor {
     public void visit() {
         if (batteryLife >= minimumReliableBattery) {
             // We believe the reading to be accurate, so update according to reading
-            double airQuality = Double.parseDouble(reading);
+            var airQuality = Double.parseDouble(reading);
             
             if (airQuality >= 0 && airQuality < 32) {
                 markerColor = "#00ff00";
@@ -83,7 +83,7 @@ public class Sensor {
     }
     
     public Feature toGeojsonFeature() {
-        Feature asGeoJson = Feature.fromGeometry(position);
+        var asGeoJson = Feature.fromGeometry(position);
         asGeoJson.addStringProperty("marker-size", markerSize);
         asGeoJson.addStringProperty("location", whatThreeWords);
         asGeoJson.addStringProperty("rgb-string", markerColor);

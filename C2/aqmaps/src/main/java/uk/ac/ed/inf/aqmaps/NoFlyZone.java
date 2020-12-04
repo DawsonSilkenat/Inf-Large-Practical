@@ -5,7 +5,7 @@ import com.mapbox.geojson.Polygon;
 
 public class NoFlyZone {
     
-    Polygon boundary;
+    private Polygon boundary;
     
     public NoFlyZone(Polygon boundary) {
         this.boundary = boundary;
@@ -23,7 +23,7 @@ public class NoFlyZone {
      * Note that this only works for crossing the edges of the no fly zone, in theory a move could start
      * and end in a no fly zone but cross no edges. This is not designed to handle that case. 
      */
-    private boolean isCrossedByMove(Point start, Point end, double floatOffset) {
+    public boolean isCrossedByMove(Point start, Point end, double floatOffset) {
         // Get x,y coordinates of each point 
         var startLng = start.longitude();
         var startLat = start.latitude();

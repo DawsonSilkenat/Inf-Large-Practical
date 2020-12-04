@@ -9,7 +9,7 @@ import com.mapbox.geojson.Point;
 
 public class Drone {
     
-    // It is assumed this value will always be 10. 
+    // It is assumed this value will always be divide 360. 
     // Changing it may result in some methods not functioning as expected
     private final int angleStepSize = 10;
     
@@ -53,7 +53,7 @@ public class Drone {
         return visitedSensorsList;
     }
     
-    // Changes the state of the sensors the drone would visit on its current flightpath
+    // Changes the state of the sensors the drone would visit on its current flight path
     public void updateSensors() {
         for (Sensor sensor : visitedSensorsList) {
             sensor.visit();
@@ -61,9 +61,8 @@ public class Drone {
     }
 
     public void findFlightPath(List<Sensor> sensors, List<NoFlyZone> noFlyZones) {
-        var moveEstimates = getMoveEstimates(sensors, noFlyZones);
         // Initially we attempt to visit all sensors. If this takes us over the move limit, we later remove sensors
-        visitedSensorsList = selectVistOrder(sensors, moveEstimates);
+        visitedSensorsList = selectVistOrder(sensors, noFlyZones);
         pathsList = new ArrayList<Path>();
           
         var updatedOrder = true;
@@ -91,7 +90,7 @@ public class Drone {
                     i--;
                 }
             }   
-            // Always possible to return to start, so no need to check for null
+            // Always needs to be possible to return to start, so no need to check for null
             pathsList.add(findPath(currentPosition, startPosition, endingDistance, 0, noFlyZones));
             
             var numberOfMoves = 0;
@@ -102,46 +101,36 @@ public class Drone {
             // We remove sensors from our visit list one at a time in a greedy manner to reduce the number of moves below maximum
             if (numberOfMoves > maxMoves) {
                 updatedOrder = true;
+                var bestDropIndex = findVisitedSensorsReduction(noFlyZones);
                 
-                if (visitedSensorsList.size() <= 1) {
-                    // Can't be reduced further, so visit no sensors
-                    visitedSensorsList = new ArrayList<>();
-                } else {
-                    var droneIndex = moveEstimates.length - 1;
-                    
-                    // The index in visitedSensorsList of the sensor we want to no longer visit to reduce the number of moves below the maximum
-                    var bestDropIndex = 0;
-                    // This is how many moves we expect to save if we were to not visit the sensor at bestDropIndex
-                    var bestDropGain = pathsList.get(0).getPositions().size() + pathsList.get(1).getPositions().size() 
-                            - moveEstimates[droneIndex][sensors.indexOf(visitedSensorsList.get(1))];
-                    
-                    // Iterate over all sensors currently being visited to find the one which not visiting maximised the number of moves saved
-                    for (int i = 1; i < visitedSensorsList.size() - 1; i++) {
-                        var thisDropGain = pathsList.get(i).getPositions().size() + pathsList.get(i + 1).getPositions().size() 
-                                - moveEstimates[sensors.indexOf(visitedSensorsList.get(i - 1))][sensors.indexOf(visitedSensorsList.get(i + 1))];
-                        
-                        if (thisDropGain >= bestDropGain) {
-                            bestDropGain = thisDropGain;
-                            bestDropIndex = i;
-                        }
-                    }
-                    
-                    // The last sensor visited needs to be checked with slightly different logic since it returns to the start rather than visit another sensor
-                    var thisDropGain = pathsList.get(pathsList.size() - 2).getPositions().size() +  pathsList.get(pathsList.size() - 1).getPositions().size() 
-                            - moveEstimates[sensors.indexOf(visitedSensorsList.get(visitedSensorsList.size() - 2))][droneIndex];
-
-                    if (thisDropGain > bestDropGain) {
-                        bestDropIndex = pathsList.size() - 2;
-                    }
-                    
-                    // Remove the selected sensor. We only need to recompute the paths from that sensor onward, all paths before are still valid 
-                    visitedSensorsList.remove(bestDropIndex);
-                    pathsList.subList(bestDropIndex, pathsList.size()).clear();
-                }
+                // Remove the selected sensor. We only need to recompute the paths from that sensor onward, all paths before are still valid 
+                visitedSensorsList.remove(bestDropIndex);
+                pathsList.subList(bestDropIndex, pathsList.size()).clear();
             }
         }
     }
     
+    private List<Sensor> selectVistOrder(List<Sensor> sensors, List<NoFlyZone> noFlyZones) { 
+        var moveEstimates = getMoveEstimates(sensors, noFlyZones);
+        var visitOrder = new ArrayList<Sensor>();
+        var orderedIndices = twoOpt(moveEstimates);
+        
+        // We want to reorder orderedIndices according to the location of the drone
+        int droneIndex = 0;
+        for (int i = 0; i < orderedIndices.length; i++) {
+            if (orderedIndices[i] == moveEstimates.length - 1) {
+                droneIndex = i;
+                break;
+            }
+        }
+        
+        for (int i = 1; i < orderedIndices.length; i++) {
+            visitOrder.add(sensors.get(orderedIndices[(droneIndex + i) % orderedIndices.length]));
+        }
+        
+        return visitOrder;
+    } 
+
     private int[][] getMoveEstimates(List<Sensor> sensors, List<NoFlyZone> noFlyZones) { 
         // Table of estimated number of moves to get from sensor i to sensor j, with the last row and column representing the drone
         var estimates = new int[sensors.size() + 1][sensors.size() + 1];
@@ -177,26 +166,6 @@ public class Drone {
         
         return estimates;
     }
-    
-    private List<Sensor> selectVistOrder(List<Sensor> sensors, int[][] distanceEstimates) { 
-        var visitOrder = new ArrayList<Sensor>();
-        var orderedIndices = twoOpt(distanceEstimates);
-        
-        // We want to reorder orderedIndices according to the location of the drone
-        int droneIndex = 0;
-        for (int i = 0; i < orderedIndices.length; i++) {
-            if (orderedIndices[i] == distanceEstimates.length - 1) {
-                droneIndex = i;
-                break;
-            }
-        }
-        
-        for (int i = 1; i < orderedIndices.length; i++) {
-            visitOrder.add(sensors.get(orderedIndices[(droneIndex + i) % orderedIndices.length]));
-        }
-        
-        return visitOrder;
-    } 
 
     /*
      * We are using the 2-opt method to find a good solution to the travelling salesperson problem
@@ -238,7 +207,7 @@ public class Drone {
     // Calls findPath with default argument for beamwidth
     private Path findPath(Point start, Point goal, double acceptableError, int minMoves, List<NoFlyZone> noFlyZones) {
      // How wide a beam we use in the beam search. Larger values can improve the path found, but also reduce performance
-     var beamWidth = 250;
+     int beamWidth = 300;
      return findPath(start, goal, acceptableError, beamWidth, minMoves, noFlyZones);
     }
       
@@ -282,7 +251,7 @@ public class Drone {
             var currentPath = searchSpace.poll();
             
             // If we have found a path which is better than all other paths in the search space which reaches the goal we are done
-            if (getDistance(currentPath.getEndPosition(), goal) <= acceptableError && currentPath.getPositions().size() >= minMoves) {  
+            if (getDistance(currentPath.getEndPosition(), goal) < acceptableError && currentPath.getPositions().size() >= minMoves) {  
                 return currentPath;
             }
             
@@ -335,6 +304,47 @@ public class Drone {
 
     private double getDistance(Point start, Point end) {     
         return Math.sqrt(Math.pow(start.longitude() - end.longitude(), 2) + Math.pow(start.latitude() - end.latitude(), 2));
+    }
+
+    /*
+     * Reduces the number of visited sensors by one, selecting the choice which is believe to reduce
+     * the number of required moves for the flight path by the most. Removes the paths which are no 
+     * longer valid due to not visiting that sensor.
+     * Does NOT compute the newly required paths
+     */
+    private int findVisitedSensorsReduction(List<NoFlyZone> noFlyZones) {
+        if (visitedSensorsList.size() <= 1) {
+            return 0;
+        } else {
+            // Index of the sensor we will no longer visit
+            var bestDropIndex = 0;
+            // The estimated cost of the new path that will be required
+            var replacementPathCost = findPath(startPosition, visitedSensorsList.get(0).getPosition(), readDistance, 1, noFlyZones).getPositions().size();
+            // How many moves we expect to save if we were to not visit the sensor at bestDropIndex
+            var bestDropSavings = pathsList.get(0).getPositions().size() + pathsList.get(1).getPositions().size()- replacementPathCost;
+                    
+            
+            // Iterate over all sensors currently being visited to find the one which not visiting maximised the number of moves saved
+            for (int i = 1; i < visitedSensorsList.size() - 1; i++) {
+                replacementPathCost = findPath(visitedSensorsList.get(i - 1).getPosition(), visitedSensorsList.get(i + 1).getPosition(), readDistance, 1, noFlyZones).getPositions().size();
+                var thisDropSavings = pathsList.get(i).getPositions().size() + pathsList.get(i + 1).getPositions().size() - replacementPathCost;
+                
+                if (thisDropSavings >= bestDropSavings) {
+                    bestDropSavings = thisDropSavings;
+                    bestDropIndex = i;
+                }
+            }
+            
+            // Last sensor needs to be treated differently due to the next location being the drones starting location rather than a sensor
+            replacementPathCost = findPath(visitedSensorsList.get(visitedSensorsList.size() - 1).getPosition(), startPosition, endingDistance, 0, noFlyZones).getPositions().size();
+            var thisDropSavings = pathsList.get(pathsList.size() - 2).getPositions().size() + pathsList.get(pathsList.size() - 1).getPositions().size() - replacementPathCost;
+            
+            if (thisDropSavings >= bestDropSavings) {
+                bestDropIndex = pathsList.size() - 2;
+            }
+            
+            return bestDropIndex;
+        }
     }   
 }
 

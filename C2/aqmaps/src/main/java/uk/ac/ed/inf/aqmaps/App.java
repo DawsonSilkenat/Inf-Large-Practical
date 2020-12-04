@@ -43,7 +43,7 @@ public class App {
         
         // Get required information from webserver
         var sensors = getSensors(day, month, year, webserver);
-        var noFlyZones = getNoFlyZones(day, month, year, webserver);
+        var noFlyZones = getNoFlyZones(webserver);
         
         // Initialise the drone and find a flight path
         var drone = new Drone(Point.fromLngLat(droneLng, droneLat), MOVE_DISTANCE, READ_DISTANCE, 
@@ -98,7 +98,7 @@ public class App {
         return new Gson().fromJson(responce.body(), listType);
     }
     
-    private static List<NoFlyZone> getNoFlyZones(String day, String month, String year, String webserver) throws IOException, InterruptedException {
+    private static List<NoFlyZone> getNoFlyZones(String webserver) throws IOException, InterruptedException {
         var client = HttpClient.newHttpClient();
         var request = HttpRequest.newBuilder().uri(URI.create(webserver + "/buildings/no-fly-zones.geojson")).build();
         var responce = client.send(request, BodyHandlers.ofString());
